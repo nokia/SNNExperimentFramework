@@ -1,0 +1,39 @@
+---
+
+events:
+  - node: client
+    command: "echo \\\"hello world\\\""
+    start_time: 0
+    kill_time: 1
+  - node: client
+    command: "{ip_client}"
+    start_time: 60
+    kill_time: 1
+  - node: epc
+    command: "{ip_server}"
+    start_time: 60
+    kill_time: 1
+  - node: client
+    command: "{tc_set_client}"
+    start_time: 61
+    kill_time: 20
+  - node: epc
+    command: "{tc_set_server}"
+    start_time: 61
+    kill_time: 20
+  - node: client
+    command: "{tc_down_client}"
+    start_time: 61
+    kill_time: 30
+  - node: epc
+    command: "{tc_down_server}"
+    start_time: 61
+    kill_time: 30
+  - node: client
+    command: "{acquire_video_stream_client}"
+    start_time: 62
+    kill_time: 60
+  - node: epc
+    command: "{start_video_stream_server}"
+    start_time: 62
+    kill_time: 60

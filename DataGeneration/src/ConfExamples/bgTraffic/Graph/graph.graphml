@@ -1,0 +1,69 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d8" for="node" attr.name="network" attr.type="string" />
+  <key id="d7" for="node" attr.name="depends" attr.type="string" />
+  <key id="d6" for="node" attr.name="ipv4" attr.type="string" />
+  <key id="d5" for="node" attr.name="command" attr.type="string" />
+  <key id="d4" for="node" attr.name="devices" attr.type="string" />
+  <key id="d3" for="node" attr.name="volumes" attr.type="string" />
+  <key id="d2" for="node" attr.name="image" attr.type="string" />
+  <key id="d1" for="node" attr.name="context" attr.type="string" />
+  <key id="d0" for="node" attr.name="name" attr.type="string" />
+  <graph edgedefault="undirected">
+    <node id="epc">
+      <data key="d0">epc</data>
+      <data key="d1">/home/mattia/src/VlcStream/server_srslte</data>
+      <data key="d2">stream_server_srslte_summer</data>
+	  <data key="d3">['{core_ue_db}:{dkr_enb_ueDB}','{server_video}:{dkr_server_video}','{server_result}:{dkr_server_result}']</data>
+      <data key="d4">/dev/net/tun</data>
+	  <data key="d5">['srsepc','--mme.mme_bind_addr={epc[ipv4]}','--spgw.gtpu_bind_addr={epc[ipv4]}','--log.filename=/tmp/result/srsEPC.log', '--pcap.enable=true', '--pcap.filename={dkr_server_result}epc.pcap']</data>
+	  <data key="d6">{server_ipv4_addr}</data>
+      <data key="d7">[]</data>
+	  <data key="d8">{network_name}</data>
+    </node>
+    <node id="enb">
+      <data key="d0">enb</data>
+      <data key="d1">""</data>
+      <data key="d2">srs-zeromq_enb1</data>
+	  <data key="d3">['{enb_rr}:{dkr_enb_rr}','{enb_tmp}:{dkr_enb_tmp}']</data>
+      <data key="d4">/dev/net/tun</data>
+      <data key="d5">['srsenb', '--enb.enb_id=0x19B', '--enb.mme_addr={epc[ipv4]}', '--enb.gtp_bind_addr={enb[ipv4]}', '--enb.s1c_bind_addr={enb[ipv4]}', '--rf.dl_earfcn=2850', '--rf.device_name=zmq', '--rf.device_args="fail_on_disconnect=true,tx_port0=tcp://*:2000,rx_port0=tcp://{client[ipv4]}:2001,tx_port1=tcp://*:2100,rx_port1=tcp://{iperfClient[ipv4]}:2101,tx_port2=tcp://*:2200,rx_port2=tcp://{iperfServer[ipv4]}:2201,id=server,base_srate=23.04e6"','--pcap.enable=true','--pcap.filename={dkr_enb_tmp}enb_mac.pcap','--expert.metrics_csv_enable=true','--expert.metrics_csv_filename={dkr_enb_tmp}enb_metrics.csv']</data>
+	  <data key="d6">{enb_ipv4_addr}</data>
+      <data key="d7">['epc']</data>
+	  <data key="d8">{network_name}</data>
+    </node>
+    <node id="client">
+      <data key="d0">client</data>
+      <data key="d1">/home/mattia/src/VlcStream/client_srslte</data>
+      <data key="d2">stream_client_srslte_summer</data>
+	  <data key="d3">['{client_result}:{dkr_client_result}']</data>
+      <data key="d4">/dev/net/tun</data>
+	  <data key="d5">['srsue','--rat.eutra.dl_earfcn=2850','--rf.device_name=zmq','--rf.device_args="tx_port=tcp://*:2001,rx_port=tcp://{enb[ipv4]}:2000,id=client,base_srate=23.04e6"','--log.filename=/tmp/result/srsUE.log','--pcap.enable=mac','--pcap.mac_filename={dkr_client_result}ue_mac.pcap','--pcap.mac_nr_filename={dkr_client_result}ue_mac.pcap','--general.metrics_csv_enable=true','--general.metrics_csv_filename={dkr_client_result}ue_metrics.csv','--usim.opc={ue1_opc}','--usim.k={ue_k}','--usim.imsi={ue1_imsi}','--usim.imei={ue1_imei}']</data>
+	  <data key="d6">{client_ipv4_addr}</data>
+      <data key="d7">['epc', 'enb']</data>
+	  <data key="d8">{network_name}</data>
+    </node>
+    <node id="iperfClient">
+      <data key="d0">iperfClient</data>
+      <data key="d1">/home/mattia/src/VlcStream/client_srslte</data>
+      <data key="d2">stream_client_srslte_summer</data>
+	  <data key="d3">['{iperfClient_result}:{dkr_client_result}']</data>
+      <data key="d4">/dev/net/tun</data>
+	  <data key="d5">['srsue','--rat.eutra.dl_earfcn=2850','--rf.device_name=zmq','--rf.device_args="tx_port=tcp://*:2101,rx_port=tcp://{enb[ipv4]}:2100,id=client,base_srate=23.04e6"','--log.filename=/tmp/result/srsUE.log','--pcap.enable=mac','--pcap.mac_filename={dkr_client_result}ue_mac.pcap','--pcap.mac_nr_filename={dkr_client_result}ue_mac.pcap','--general.metrics_csv_enable=true','--general.metrics_csv_filename={dkr_client_result}ue_metrics.csv','--usim.opc={ue2_opc}','--usim.k={ue_k}','--usim.imsi={ue2_imsi}','--usim.imei={ue2_imei}']</data>
+	  <data key="d6">{iperfClient_ipv4_addr}</data>
+      <data key="d7">['epc', 'enb']</data>
+	  <data key="d8">{network_name}</data>
+    </node>
+    <node id="iperfServer">
+      <data key="d0">iperfServer</data>
+      <data key="d1">/home/mattia/src/VlcStream/client_srslte</data>
+      <data key="d2">stream_client_srslte_summer</data>
+	  <data key="d3">['{iperfServer_result}:{dkr_client_result}']</data>
+      <data key="d4">/dev/net/tun</data>
+	  <data key="d5">['srsue','--rat.eutra.dl_earfcn=2850','--rf.device_name=zmq','--rf.device_args="tx_port=tcp://*:2201,rx_port=tcp://{enb[ipv4]}:2200,id=client,base_srate=23.04e6"','--log.filename=/tmp/result/srsUE.log','--pcap.enable=mac','--pcap.mac_filename={dkr_client_result}ue_mac.pcap','--pcap.mac_nr_filename={dkr_client_result}ue_mac.pcap','--general.metrics_csv_enable=true','--general.metrics_csv_filename={dkr_client_result}ue_metrics.csv','--usim.opc={ue3_opc}','--usim.k={ue_k}','--usim.imsi={ue3_imsi}','--usim.imei={ue3_imei}']</data>
+	  <data key="d6">{iperfServer_ipv4_addr}</data>
+      <data key="d7">['epc', 'enb']</data>
+	  <data key="d8">{network_name}</data>
+    </node>
+  </graph>
+</graphml>

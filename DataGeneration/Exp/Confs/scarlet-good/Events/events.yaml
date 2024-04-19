@@ -1,0 +1,70 @@
+---
+
+events:
+  - node: client
+    command: "echo \\\"hello world\\\""
+    start_time: 0
+    kill_time: 1
+  - node: epc
+    command: "{generate_sdp}"
+    start_time: 55
+    kill_time: 2
+  - node: host
+    command: "{move_sdp}"
+    start_time: 58
+    kill_time: 1
+  - node: epc
+    command: "{dkr_server_result}./Capture.sh -i {epc_interface} -w {dkr_epc_tcpdump_path}"
+    start_time: 59
+    kill_time: 35
+  - node: enb
+    command: "tcpdump -ni eth0 host {server_ipv4_addr} -w {dkr_enb_tcpdump_path} &"
+    start_time: 59
+    kill_time: 35
+  - node: epc
+    command: "{start_video_stream_server}"
+    start_time: 60
+    kill_time: 30
+  - node: client
+    command: "{acquire_video_stream_client}"
+    start_time: 61
+    kill_time: 30
+  - node: enb
+    command: "{enb_cleanPCAP}"
+    start_time: 95
+    kill_time: 10
+  - node: epc
+    command: "{epc_cleanPCAP}"
+    start_time: 95
+    kill_time: 10
+postEvents:
+  - command: "{main_folder}/bash/./video_trim.sh -r {client_result}/{client_output_video} -o {server_result}/{server_output_video} -f {frames} -s {server_result}/trimmed.mp4 >> {server_result}/trimming.out 2>&1"
+    start_time: 1
+    kill_time: 10
+  - command: "{main_folder}/bash/./evaluate_vmaf.sh -p 1 -f {server_result}/trimmed.mp4 -d {client_result}/{client_output_video} -o {server_result}/vmaf.csv >> {server_result}/vmaf.out 2>&1"
+    start_time: 10
+    kill_time: 10
+  - command: "python3 py/closeMessagesFix.py -f {enb_packets_path} -o {enb_packets_cld_path}"
+    start_time: 1
+    kill_time: 3
+  - command: "python3 py/netStats.py -f {enb_packets_cld_path} -o {enb_netStats_path}"
+    start_time: 5
+    kill_time: 5
+  - command: "python3 py/netStats.py -f {epc_packets_path} -o {epc_netStats_path}"
+    start_time: 5
+    kill_time: 5
+  - command: "python3 py/ns2data.py -f {epc_netStats_path} {enb_netStats_path} -o {enb_reception_result_path} -d {enb_header_delta}"
+    start_time: 11
+    kill_time: 5
+  - command: "python3 py/nsVmafMerge.py -f {enb_reception_result_path} -v {server_result}/vmaf.csv -o {results}/statistics.csv"
+    start_time: 16
+    kill_time: 1
+  - command: "{clean_client_folder}"
+    start_time: 16
+    kill_time: 1
+  - command: "{clean_enb_folder}"
+    start_time: 16
+    kill_time: 1
+  - command: "{clean_epc_folder}"
+    start_time: 16
+    kill_time: 1

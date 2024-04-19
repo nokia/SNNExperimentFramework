@@ -1,0 +1,15 @@
+---
+
+events:
+  - node: test
+    command: "test"
+    start_time: 10
+    kill_time: 10
+  - node: test
+    command: "test"
+    start_time: 15
+    kill_time: 2
+  - node: test
+    command: "test"
+    start_time: 17
+    kill_time: 1

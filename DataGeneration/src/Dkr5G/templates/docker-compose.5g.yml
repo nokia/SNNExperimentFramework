@@ -1,0 +1,88 @@
+version: "3"
+
+services:
+  epc:
+    build:
+      context: ./server_srslte
+    image: stream_server_srslte
+    hostname: epc
+    tty: true
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - ALL
+    volumes:
+      - ${server_video}:/tmp/video.${extension}
+      - ${server_result}:/tmp/result/
+    security_opt:
+      - seccomp:unconfined
+    devices:
+      - /dev/net/tun
+    command:
+      - srsepc
+      - --mme.mme_bind_addr=${epc_addr}
+      - --spgw.gtpu_bind_addr=${epc_addr}
+    networks:
+      corenet:
+        ipv4_address: ${epc_addr}
+
+  client:
+    build:
+      context: ./client_srslte
+    image: stream_client_srslte
+    hostname: client
+    privileged: true
+    tty: true
+    cap_add:
+      - NET_ADMIN
+      - ALL
+    volumes:
+      - ${client_result}:/tmp/result
+    security_opt:
+      - seccomp:unconfined
+    devices:
+      - /dev/net/tun
+    command:
+      - srsue
+      - --rf.device_name=zmq
+      - --rf.device_args="tx_port=tcp://*:2001,rx_port=tcp://${node_addr}:2000,id=client,base_srate=23.04e6"
+    networks:
+      corenet:
+        ipv4_address: ${ue_addr}
+    depends_on:
+      - epc
+      - enb
+
+  enb:
+    image: srs-zeromq_enb1
+    hostname: enb
+    privileged: true
+    tty: true
+    volumes:
+      - /home/mattia/srsRAN:/home/emmegi
+      - /home/mattia/srsRAN/enb_tmp:/tmp
+    devices:
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - ALL
+    command:
+      - srsenb
+      - --enb.enb_id=0x19B
+      - --enb.mme_addr=${epc_addr}
+      - --enb.gtp_bind_addr=${node_addr}
+      - --enb.s1c_bind_addr=${node_addr}
+      - --rf.device_name=zmq
+      - --rf.device_args="fail_on_disconnect=true,tx_port=tcp://*:2000,rx_port=tcp://${ue_addr}:2001,id=server,base_srate=23.04e6"
+    depends_on:
+      - epc
+    networks:
+      corenet:
+        ipv4_address: ${node_addr}
+
+networks:
+  corenet:
+    ipam:
+      driver: default
+      config:
+        - subnet: ${net}

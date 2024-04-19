@@ -1,0 +1,54 @@
+---
+
+events:
+  - node: client
+    command: "echo \\\"hello world\\\""
+    start_time: 0
+    kill_time: 1
+  - node: client
+    command: "{ip_client}"
+    start_time: 60
+    kill_time: 1
+  - node: epc
+    command: "{ip_server}"
+    start_time: 60
+    kill_time: 1
+  - node: client
+    command: "{tc_set_client}"
+    start_time: 61
+    kill_time: 20
+  - node: epc
+    command: "{tc_set_server}"
+    start_time: 61
+    kill_time: 20
+  - node: client
+    command: "{tc_down_client}"
+    start_time: 61
+    kill_time: 30
+  - node: epc
+    command: "{tc_down_server}"
+    start_time: 61
+    kill_time: 30
+  - node: epc
+    command: "{generate_sdp}"
+    start_time: 70
+    kill_time: 60
+  - node: host
+    command: "{move_sdp}"
+    start_time: 130
+    kill_time: 135
+  - node: epc
+    command: "{start_video_stream_server}"
+    start_time: 140
+    kill_time: 60
+  - node: client
+    command: "{acquire_video_stream_client}"
+    start_time: 141
+    kill_time: 60
+postEvents:
+  - command: "{main_folder}/bash/./video_trim.sh -r {client_result}/{client_output_video} -o {server_result}/{server_output_video} -f {frames} -s {server_result}/trimmed.mp4 >> {server_result}/trimming.out 2>&1"
+    start_time: 1
+    kill_time: 10
+  - command: "../VlcStream/bash/./evaluate_vmaf.sh -f {server_result}/trimmed.mp4 -d {client_result}/{client_output_video} -o {server_result}/vmaf.csv >> {server_result}/vmaf.out 2>&1"
+    start_time: 10
+    kill_time: 20
