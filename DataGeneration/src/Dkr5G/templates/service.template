@@ -1,0 +1,23 @@
+  {service_name}:
+    build:
+      context: {context_path}
+    image: {image}
+    container_name: {service_name}
+    hostname: {host_name}
+    tty: true
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - ALL
+    volumes:
+      {volumes}
+    security_opt:
+      - seccomp:unconfined
+    devices:
+      {devices}
+    command:
+      {commands}
+    networks:
+      {net_name}:
+        ipv4_address: {ipv4_address}
+    {dependencies}

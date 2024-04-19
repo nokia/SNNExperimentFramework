@@ -1,0 +1,4 @@
+ffmpeg -re -i video.mp4 -c copy -f h264 -flags +global_header udp://172.16.100.2:8554
+ffmpeg -i udp://localhost:8554 -c:v copy output.mp4
+ffmpeg -use_wallclock_as_timestamps 1 -i udp://localhost:8554 -r 24 -c:v copy -flags +global_header -movflags faststart test.mp4
+ffmpeg -re -i video.mp4 -c copy -f h264 -flags +global_header -movflags +faststart -fflags +genpts udp://172.16.100.2:8554

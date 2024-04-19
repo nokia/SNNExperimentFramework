@@ -1,0 +1,6 @@
+  {net_name}:
+    ipam:
+      driver: default
+      config:
+        - subnet: {network}
+

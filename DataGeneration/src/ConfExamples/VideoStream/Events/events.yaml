@@ -1,0 +1,29 @@
+---
+
+events:
+  - node: client
+    command: "./tmp/tc_set.sh -w 10 -d 0ms -l 0% -r 100mbit burst 1600 limit 3000 -i tun_srsue"
+    start_time: 5
+    kill_time: 60
+  - node: epc
+    command: "./tmp/tc_set.sh -w 10 -d 0ms -l 0% -r 100mbit burst 1600 limit 3000 -i srs_spgw_sgi"
+    start_time: 5
+    kill_time: 60
+  - node: client
+    command: "./tmp/tc_down.sh -w 20 -i tun_srsue"
+    start_time: 5
+    kill_time: 60
+  - node: epc
+    command: "./tmp/tc_down.sh -w 20 -i srs_spgw_sgi"
+    start_time: 5
+    kill_time: 60
+  - node: client
+    command: "./tmp/acquire_video_stream.sh -s udp://@:8554 -f tmp/result/output_video.mp4 -t 35 -l tmp/result/client.log -h 1500 -p 8554 -e mp4 -n 2000"
+    start_time: 6
+    kill_time: 60
+  - node: epc
+    command: "./tmp/simulate_video_stream.sh -f /tmp/video.mp4 -i 192.168.11.12:8554 -o local.mp4 -l 1000"
+    start_time: 5
+    kill_time: 60
+
+

@@ -1,0 +1,19 @@
+---
+
+events:
+  - node: test
+    command: "test - {Log}"
+    start_time: 10
+    kill_time: 10
+  - node: test
+    command: "test - {network_name}"
+    start_time: 15
+    kill_time: 2
+  - node: test
+    command: "test - {test[ipv4]}"
+    start_time: 15
+    kill_time: 2
+postEvents:
+  - command: "echo \"Hello World!\""
+    start_time: 12
+    kill_time: 10
