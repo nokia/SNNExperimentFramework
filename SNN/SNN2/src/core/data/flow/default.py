@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 """
 class default flow
@@ -41,14 +52,16 @@ class defaultFlow:
         self.PklH = PklH
         pass
 
-    def apply_normalize(self, data, mean, std, label: str = "windows") -> DataManager:
-        return self.action_parm.get_handler("normalize")(
-                data.dft(label),
-                mean, std)
+    def apply_normalize(self, data, *args, label: str = "windows",
+                        technique: str = "normalize") -> DataManager:
+        return self.action_parm.get_handler(technique)(
+                data.dft(label), *args)
 
     def check_pkl_list(self, file_list: List[str]) -> Union[bool, None]:
         if self.PklH is None:
+            self.write_msg("Pickle handler not available")
             return None
+        self.write_msg(f"check_pkl_list {self.PklH.check(file_list[0])} for {file_list[0]}")
         return all([self.PklH.check(file) for file in file_list])
 
     def load_pkl_list(self, file_list: List[str], wrapper: Callable= None) -> Union[Tuple[Any, ...], None]:
@@ -61,7 +74,8 @@ class defaultFlow:
             wrapper = repeat
         return tuple([wrapper(self.PklH.load(file)) for file in file_list])
 
-    def save_pkl_dct(self, obj_dct: Dict[str, Any], wrapper: Callable = None) -> None:
+    def save_pkl_dct(self, obj_dct: Dict[str, Any], wrapper: Callable = None,
+                     **kwargs) -> None:
         if self.PklH is None:
             return None
 
@@ -70,7 +84,7 @@ class defaultFlow:
                 return obj
             wrapper = repeat
         for key, obj in obj_dct.items():
-            self.PklH.save(wrapper(obj), key)
+            self.PklH.save(wrapper(obj), key, **kwargs)
 
     def save_data(self,
                   datasets: List[DataManager],

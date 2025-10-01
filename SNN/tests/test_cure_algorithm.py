@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 """
 CURE algorithm test module
@@ -19,8 +30,9 @@ from pyclustering.cluster.cure import cure;
 from pyclustering.utils import read_sample;
 from pyclustering.samples.definitions import FCPS_SAMPLES;
 
-from SNN2.src.model.layers.CURELayer.algorithm import TfCURE, TfCluster
-from SNN2.src.model.layers.CURELayer.algorithm import TfClusters
+from SNN2.src.model.layers.CURELayer.tf_CURE import TfCURE
+from SNN2.src.model.layers.CURELayer.tf_cluster import TfCluster
+from SNN2.src.model.layers.tf_cure import TfCURE
 
 def tf_round(t, decimals=0):
     mul = tf.constant(10**decimals, dtype=t.dtype)
@@ -188,15 +200,25 @@ class TestTfCURE():
     def test_clustering(self) -> None:
         input_data = read_sample(FCPS_SAMPLES.SAMPLE_LSUN)
         # Allocate three clusters.
-        cure_instance = cure(input_data, 3)
+        cure_instance = cure(input_data, 3, ccore=False)
         cure_instance.process()
         clusters = cure_instance.get_clusters()
+        with tf.device('/GPU:0'):
+            input_data_tf = tf.convert_to_tensor(input_data)
+            tf_cure_instance = TfCURE(input_data_tf, 3)
+            tf_cure_instance.process()
 
-        input_data_tf = tf.convert_to_tensor(input_data)
-        tf_cure_instance = TfCURE(input_data_tf, 3)
-        tf_cure_instance.process()
-        tf_clusters = tf_cure_instance.clusters
-        assert tf_clusters is not None
-
-        np.testing.assert_equal(clusters, tf_clusters.numpy())
+        pyclst_rep = np.array(cure_instance.get_representors())
+        pyclst_rep = np.round(pyclst_rep, decimals=4)
+        # tf_clusters = tf_cure_instance.clusters
+        # assert tf_clusters is not None
+        #
+        # np.testing.assert_equal(clusters, tf_clusters.numpy())
+        tf_reps = tf_cure_instance.clusters.reps.numpy()
+        tf_reps = np.round(tf_reps, decimals=4)
+        # Assert the two array have the same shape
+        assert pyclst_rep.shape == tf_reps.shape
+        # Assert that all elements from pyclst_rep are in tf_reps independently from the order
+        assert all([any([np.allclose(x, y) for y in tf_reps]) for x in pyclst_rep])
+        assert False
 

@@ -1,7 +1,18 @@
 #!/usr/bin/env python
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the graphNU grapheneral Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# graphNU grapheneral Public License for more details.
+#
+# You should have received a copy of the graphNU grapheneral Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2021 Mattia Milani <mattia.milani@studenti.unitn.it>
 
 from typing import Tuple
 import tensorflow as tf
@@ -24,6 +35,16 @@ class distance(layers.Layer):
         ap_distance = tf.reduce_sum(tf.square(anchor - positive), -1)
         an_distance = tf.reduce_sum(tf.square(anchor - negative), -1)
         return (ap_distance, an_distance)
+
+@cclayer
+class ContrastiveDistance(layers.Layer):
+
+    def __init__(self, name="DistanceLayer", **kwargs):
+        super().__init__(name=name, **kwargs)
+
+    def call(self, x, y):
+        sum_square = tf.reduce_sum(tf.square(x - y), axis=-1, keepdims=True)
+        return tf.sqrt(tf.maximum(sum_square, tf.keras.backend.epsilon()))
 
 @cclayer
 class mahalanobis_distance(layers.Layer):

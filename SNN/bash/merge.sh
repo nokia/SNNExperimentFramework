@@ -31,11 +31,15 @@ if [ $remove ] && find  ${root} -name 'merged_*' | grep -q '.'; then
 		done
 fi
 
+echo "HERE 1!!!!!!!!!!!!!!!!!!!!!"
 ./bash/merge_ott_stats.sh -f ${root} -o ${output} -a ${appendix} -c
+echo "HERE 2!!!!!!!!!!!!!!!!!!!!!"
 ./bash/merge_gray_stats.sh -f ${root} -o ${output} -a ${appendix} -c
+echo "HERE 3!!!!!!!!!!!!!!!!!!!!!"
 if $rl; then
 		./bash/merge_reinforce_stats.sh -f ${root} -o ${output} -a ${appendix} -c
 fi
+echo "HERE 4!!!!!!!!!!!!!!!!!!!!!"
 
 sed -i -e 's/distance_accuracy/MNO\_Accuracy/' ${root}/merged_evaluation_stats_${appendix}.csv
 sed -i -e 's/OTT_accuracy/OTT\_Accuracy/' ${root}/merged_ott_stats_${appendix}.csv

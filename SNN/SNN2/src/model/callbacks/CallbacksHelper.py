@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 """
 CallbackHelper module
@@ -35,7 +46,8 @@ class CallbackHelper:
                  snn_model: Optional[MH] = None,
                  ph: Optional[PH] = None,
                  rl_model: Optional[RLMH] = None,
-                 EnvExitFunctionH: Optional[PH] = None) -> None:
+                 EnvExitFunctionH: Optional[PH] = None,
+                 model_extra_label: Optional[str] = None) -> None:
         self.req_cbs = required_callbacks
         self.write_msg(f"Required callbacks: {self.req_cbs}")
         self.cbsH = callbacksH
@@ -47,6 +59,7 @@ class CallbackHelper:
         self.ph = ph
         self.rl_model = rl_model
         self.EnvExitFunctionH = EnvExitFunctionH
+        self.extra_label = model_extra_label
 
     def __check(self, obj: Any, label = "Object") -> None:
         if obj is None:
@@ -72,49 +85,81 @@ class CallbackHelper:
                         logger = self.logger)
 
     def get_saveEmbeddings_obj(self) -> Tuple[List[tf.Tensor], List[str]]:
-        sample_sets = [self.data.goods_prop.dft("Windows"),
-                       self.data.bads_prop.dft("Windows"),
-                       self.data.grays_prop.dft("Windows"),
-                       self.data.training.dft("Windows"),
-                       self.data.validation.dft("Windows"),
-                       self.data.test.dft("Windows"),
-                       self.data.gray_triplets.dft("TripletDst")[:, 0],
-                       self.data.gray_triplets.dft("TripletDst")[:, 1],
-                       self.data.gray_triplets.dft("TripletDst")[:, 2]]
-        labels = ["goods", "bads", "difficult", "training", "validation", "test",
-                  "difficult_p", "difficult_a", "difficult_n"]
+        # sample_sets = [self.data.goods_prop.dft("Windows"),
+        #                self.data.bads_prop.dft("Windows"),
+        #                self.data.grays_prop.dft("Windows"),
+        #                self.data.training.dft("Windows"),
+        #                self.data.validation.dft("Windows"),
+        #                self.data.test.dft("Windows"),
+        #                self.data.gray_triplets.dft("TripletDst")[:, 0],
+        #                self.data.gray_triplets.dft("TripletDst")[:, 1],
+        #                self.data.gray_triplets.dft("TripletDst")[:, 2]]
+        # labels = ["goods", "bads", "difficult", "training", "validation", "test",
+        #           "difficult_p", "difficult_a", "difficult_n"]
+        # print(self.data.goods_prop.keys())
+        # sample_sets = []
+        sample_sets = [self.data.goods_prop["Windows"]["TfDataset"],
+                       self.data.bads_prop["Windows"]["TfDataset"],
+                       self.data.grays_prop["Windows"]["TfDataset"]]
+                       # self.data.extra_bads_prop["Windows"]["TfDataset"]]
+        # labels = []
+        labels = ["BADDIFF-goods",
+                  "BADDIFF-bads",
+                  "BADDIFF-difficult"]
+                  # "bads_september_only"]
+        if self.extra_label is not None:
+            labels = [f"{self.extra_label}_{label}" for label in labels]
         return (sample_sets, labels)
 
     def get_pklObject_sets(self) -> Tuple[List[tf.Tensor], List[str]]:
-        objects = [self.data.goods_prop.dft("Targets"),
-                   self.data.goods_prop.dft("Classes"),
-                   self.data.goods_prop.dft("ExpectedLabel"),
-                   self.data.bads_prop.dft("Targets"),
-                   self.data.bads_prop.dft("Classes"),
-                   self.data.bads_prop.dft("ExpectedLabel"),
+        # objects = [self.data.goods_prop.dft("Targets"),
+        #            self.data.goods_prop.dft("Classes"),
+        #            self.data.goods_prop.dft("ExpectedLabel"),
+        #            self.data.bads_prop.dft("Targets"),
+        #            self.data.bads_prop.dft("Classes"),
+        #            self.data.bads_prop.dft("ExpectedLabel"),
+        #            self.data.grays_prop.dft("Targets"),
+        #            self.data.grays_prop.dft("Classes"),
+        #            self.data.grays_prop.dft("ExpectedLabel"),
+        #            self.data.training.dft("Targets"),
+        #            self.data.training.dft("Classes"),
+        #            self.data.training.dft("ExpectedLabel"),
+        #            self.data.validation.dft("Targets"),
+        #            self.data.validation.dft("Classes"),
+        #            self.data.validation.dft("ExpectedLabel"),
+        #            self.data.test.dft("Targets"),
+        #            self.data.test.dft("Classes"),
+        #            self.data.test.dft("ExpectedLabel"),
+        #            self.data.gray_triplets.dft("Targets"),
+        #            self.data.gray_triplets.dft("Classes"),
+        #            self.data.gray_triplets.dft("ExpectedLabel"),
+        #           ]
+        # labels = ["goods_vmaf", "goods_origin", "goods_exp_l",
+        #           "bads_vmaf", "bads_origin", "bads_exp_l",
+        #           "difficult_vmaf", "difficult_origin", "difficult_exp_l",
+        #           "training_vmaf", "training_origin", "training_exp_l",
+        #           "validation_vmaf", "validation_origin", "validation_exp_l",
+        #           "test_vmaf", "test_origin", "test_exp_l",
+        #           "difficult_triplets_vmaf", "difficult_triplets_origin", "difficult_triplets_exp_l"]
+        # objects = [dst2tensor(self.data.goods_prop["Windows"]["TfDataset"]),
+        #            dst2tensor(self.data.bads_prop["Windows"]["TfDataset"]),
+                   # self.data.goods_prop.dft("Targets"),
+        objects = [self.data.bads_prop.dft("Targets"),
                    self.data.grays_prop.dft("Targets"),
-                   self.data.grays_prop.dft("Classes"),
-                   self.data.grays_prop.dft("ExpectedLabel"),
-                   self.data.training.dft("Targets"),
-                   self.data.training.dft("Classes"),
-                   self.data.training.dft("ExpectedLabel"),
-                   self.data.validation.dft("Targets"),
-                   self.data.validation.dft("Classes"),
-                   self.data.validation.dft("ExpectedLabel"),
-                   self.data.test.dft("Targets"),
-                   self.data.test.dft("Classes"),
-                   self.data.test.dft("ExpectedLabel"),
-                   self.data.gray_triplets.dft("Targets"),
-                   self.data.gray_triplets.dft("Classes"),
-                   self.data.gray_triplets.dft("ExpectedLabel"),
-                  ]
-        labels = ["goods_vmaf", "goods_origin", "goods_exp_l",
-                  "bads_vmaf", "bads_origin", "bads_exp_l",
-                  "difficult_vmaf", "difficult_origin", "difficult_exp_l",
-                  "training_vmaf", "training_origin", "training_exp_l",
-                  "validation_vmaf", "validation_origin", "validation_exp_l",
-                  "test_vmaf", "test_origin", "test_exp_l",
-                  "difficult_triplets_vmaf", "difficult_triplets_origin", "difficult_triplets_exp_l"]
+                   self.data.bads_prop.dft("ExpID"),
+                   self.data.grays_prop.dft("ExpID")]
+                  #  self.data.extra_bads_prop.dft("Targets")
+                  # ]
+        # labels = ["BADDIFF-goods_windows",
+        #           "BADDIFF-bads_windows",
+        #           "BADDIFF-goods_target",
+        labels = ["BADDIFF-bads_target",
+                  "BADDIFF-difficult_target",
+                  "BADDIFF-bads_ExpID",
+                  "BADDIFF-Difficult_ExpID"]
+                  # "bads_september_only_target"]
+        if self.extra_label is not None:
+            labels = [f"{self.extra_label}_{label}" for label in labels]
         return (objects, labels)
 
     def __saveEmbeddings(self) -> Callback:

@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 import ast
 from copy import deepcopy
@@ -16,6 +27,7 @@ import tensorflow as tf
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from statsmodels.graphics.tsaplots import plot_acf
+from matplotlib.lines import Line2D
 from SNN2.src.decorators.decorators import c_logger
 from SNN2.src.util.helper import dst2tensor
 
@@ -141,8 +153,35 @@ class Study:
         p.sns_set(font_scale=2.25)
         p.sns_set_api(sns.set_style, "white")
         self.plot(p, "ecdf", *args, **kwargs)
+        for lines, linestyle, legend_handle in zip(p.plot.axes.lines, [':', '--', '-'], p.plot.axes.legend_.legendHandles):
+            lines.set_linestyle(linestyle)
+            legend_handle.set_linestyle(linestyle)
         mplt.yticks([0.0, 0.25, 0.5, 0.75, 1.0], ['0', '25', '50', '75', '100'])
         p.save(output)
+
+    def line(self, df: pd.DataFrame,
+             output: str,
+             *args,
+             palette: Optional[Any] = None,
+             **kwargs) -> None:
+        p = plt(df, format=["pdf", "png"], palette=palette)
+        p.sns_set(font_scale=2.25)
+        p.sns_set_api(sns.set_style, "white")
+        self.plot(p, "line", *args, **kwargs)
+        self.write_msg(len(p.plot.axes.lines))
+        self.write_msg(len(p.plot.axes.legend_.legendHandles))
+        lines = p.plot.axes.lines[0:3]
+        self.write_msg(len(lines))
+        for lines, linestyle, legend_handle, color in zip(lines, [':', '--', '-'], p.plot.axes.legend_.legendHandles, palette):
+            lines.set_linestyle(linestyle)
+            if linestyle == '--':
+                self.write_msg(f"handle type: {type(legend_handle)}")
+                legend_handle.set_fill(False)
+            legend_handle.set_linestyle(linestyle)
+            legend_handle.set_color(color)
+        mplt.xticks([1, 30, 60, 90, 120], ['1', '30', '60', '90', '120'])
+        p.save(output)
+
 
     def violin(self, df: pd.DataFrame,
             output: str,
@@ -185,9 +224,50 @@ class Study:
                   hue_order=["U", "B", "G"],
                   palette=cm,
                   linewidth=2.0,
-                  set_kwargs={"xlabel": f"VMAF Value",
+                  set_kwargs={"xlabel": f"Anomalous minutes",
                               "ylabel": "Proportion [%]"},
                   legend_kwargs={"ncol": 3, "x": 0.5, "y": 0.5, "labels": [r"$\hat{G}$", r"$\hat{B}$", r"$\hat{U}$"]})
+
+    def all_window_feature_study(self,
+                                 data: List[Dict[str, Dict[str, Any]]],
+                                 labels: List[str]) -> None:
+        clms = list(data[0]['Windows']['columns'])
+        df_clms = ['Label', 'Minute']
+        df_clms.extend(clms)
+        df = pd.DataFrame(columns=df_clms)
+
+        for trg, l in zip(data, labels):
+            targets: tf.Tensor = trg.dft("Windows")
+            targets = targets.numpy()
+            minute = np.repeat(np.arange(1, targets.shape[1]+1), targets.shape[0])
+            targets = np.reshape(targets, (targets.shape[0]*targets.shape[1], targets.shape[2]))
+            l_data = {'Label': l, 'Minute': minute}
+            trg_data = {clm: targets[:, i] for i, clm in enumerate(clms)}
+            l_data.update(trg_data)
+            tmp_df = pd.DataFrame(l_data)
+            df = pd.concat([df, tmp_df])
+
+        self.write_msg(f"Dataframe: {df}")
+
+        for clm in clms:
+            output_file = f"{self.output}/evolution_{clm}_all_windows.pdf"
+            colors = ["#e41a1c", "#377eb8", "#4daf4a"]
+            cm = sns.color_palette(colors)
+            rcParams['figure.figsize'] = 8,4
+            rcParams['font.size'] = 25
+
+            self.line(df, output_file,
+                      x="Minute",
+                      y=clm,
+                      hue="Label",
+                      hue_order=["U", "B", "G"],
+                      palette=cm,
+                      linewidth=2.0,
+                      set_kwargs={"xlabel": f"Window [mm]",
+                                  "ylabel": "Value",
+                                  "title": f"{clm} evolution"},
+                      legend_kwargs={"ncol": 3, "x": 0.5, "y": -0.5, "labels": [r"$\hat{G}$", r"$\hat{B}$", r"$\hat{U}$"]})
+
 
     def window_study(self,
                      data: Dict[str, Dict[str, Any]],
@@ -300,16 +380,19 @@ class Study:
         # self.window_study(self.data.goods_prop, "Trivial-Positives")
         # self.window_study(self.data.bads_prop, "Trivial-Negatives")
         # self.window_study(self.data.grays_prop, "Difficult")
-        self.all_window_study([self.data.goods_prop, self.data.bads_prop, self.data.grays_prop], ["G", "B", "U"])
+        self.all_window_study([self.data.goods_prop, self.data.bads_prop, self.data.grays_prop],
+                              ["G", "B", "U"])
+        self.all_window_feature_study([self.data.goods_prop, self.data.bads_prop, self.data.grays_prop],
+                                      ["G", "B", "U"])
         # self.window_study(self.data.training, "Training")
         # self.window_study(self.data.validation, "Validation")
         # self.window_study(self.data.test, "Test")
         # self.window_study(self.data.gray_out_train, "Difficult")
 
-        # self.window_umap(self.data.training, "Training")
-        # self.window_umap(self.data.validation, "Validation")
-        # self.window_umap(self.data.test, "Test")
-        # self.window_umap(self.data.gray_out_train, "Difficult")
+        self.window_umap(self.data.training, "Training")
+        self.window_umap(self.data.validation, "Validation")
+        self.window_umap(self.data.test, "Test")
+        self.window_umap(self.data.gray_out_train, "Difficult")
 
     def calculate_distances(self,
                             p: np.ndarray,

@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 import ast
 from typing import List, Optional, Tuple
@@ -46,6 +57,7 @@ class SiameseEnv(DefaultModelHandler):
         self.trained = False
         self.margin_reset = self.params["margin_reset", True]
         self.random_margin = self.params["random_margin", True]
+        self.freeze_until = self.params["freeze_until", True] if self.params.check("freeze_until") else 0
         self.random_margin_lower = -1.0
         self.random_margin_higher = 1.0
         if self.random_margin:
@@ -62,6 +74,10 @@ class SiameseEnv(DefaultModelHandler):
                     inpt, self.define_model_output(self.emb, inpt, name="output")
                 )
         self.write_msg("Model initialized")
+
+        # If freeze_until is set then freeze the layers until the specified layer
+        if self.freeze_until > 0:
+            self.freeze_layers(self.freeze_until)
 
         # If the weights files exists then load those
         self.load()
@@ -112,6 +128,10 @@ class SiameseEnv(DefaultModelHandler):
         )
         self.write_msg("Distance layer initialized")
         return distances
+
+    def freeze_layers(self, layer_number: int) -> None:
+        for layer in self.emb.layers[:layer_number]:
+            layer.trainable = False
 
     def get_state(self) -> np.ndarray:
         return np.array([param.numpy() for param in self.loss_param_ref.values()])

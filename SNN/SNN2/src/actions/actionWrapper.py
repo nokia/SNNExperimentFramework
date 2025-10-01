@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 from copy import deepcopy
 import math
@@ -113,7 +124,7 @@ def generateTripletsNG(anchor: DataManager,
     goods = anchor.sub_select(g_idx)
     bads = anchor.sub_select(b_idx)
 
-    return GenerateGrayTriplets(anchor, goods, bads, logger=logger)
+    return GenerateGrayTriplets(anchor, goods, bads, **kwargs)
 
 
 @action
@@ -174,6 +185,9 @@ def generatePredictionTriplets(anchor: DataManager,
                                positive: DataManager,
                                negative: DataManager,
                                *args,
+                               keep_tf_dft: bool = False,
+                               keep_anchor_wdw: bool = False,
+                               keep_all_wdw: bool = False,
                                **kwargs) -> DataManager:
     logger, write_msg = kwargs["logger"], kwargs["write_msg"]
 
@@ -188,24 +202,35 @@ def generatePredictionTriplets(anchor: DataManager,
     idx_n = tf.random.shuffle(tf.reshape(tf.repeat(tf.reshape(idx_n, [1, len(idx_n)]), repeats=reps_n, axis=0), [-1]))[:len(idx_a)]
     write_msg(f"n indexes: {idx_n}, len: {len(idx_p)}", level=LH.DEBUG)
 
-    new_positive = positive.sub_select(idx_p)
-    new_negative = negative.sub_select(idx_n)
-    new_anchor = anchor.sub_select(idx_a)
-    write_msg(f"P shape: {new_positive['Windows']['tf_values'].shape}")
-    write_msg(f"A shape: {new_anchor['Windows']['tf_values'].shape}")
-    write_msg(f"N shape: {new_negative['Windows']['tf_values'].shape}")
+    tmp_p = positive.sub_select(idx_p, inplace=False)
+    tmp_n = negative.sub_select(idx_n, inplace=False)
+    tmp_a = anchor.sub_select(idx_a, inplace=False)
+    write_msg(f"P shape: {tmp_p['Windows']['tf_values'].shape}")
+    write_msg(f"A shape: {tmp_a['Windows']['tf_values'].shape}")
+    write_msg(f"N shape: {tmp_n['Windows']['tf_values'].shape}")
 
-    new_anchor["TripletDst"] = None
-    new_anchor["TripletDst"].set_default(
-                tf.stack([new_positive.dft("Windows"),
-                          new_anchor.dft("Windows"),
-                          new_negative.dft("Windows")],
-                         axis=1))
-    new_anchor["TripletDst"]["TfDataset"] = tf.data.Dataset.from_tensor_slices(
-                (new_positive.dft("Windows"),
-                 new_anchor.dft("Windows"),
-                 new_negative.dft("Windows")))
-    return new_anchor
+    tmp_a["TripletDst"] = None
+    if keep_tf_dft:
+        tmp_a["TripletDst"].set_default(
+                    tf.stack([tmp_p.dft("Windows"),
+                              tmp_a.dft("Windows"),
+                              tmp_n.dft("Windows")],
+                             axis=1))
+    else:
+        tmp_a["TripletDst"].set_default(tf.zeros([3, 4], tf.int8))
+    tmp_a["TripletDst"]["TfDataset"] = tf.data.Dataset.from_tensor_slices(
+                (tmp_p.dft("Windows"),
+                 tmp_a.dft("Windows"),
+                 tmp_n.dft("Windows")))
+
+    if not keep_anchor_wdw:
+        del tmp_a["Windows"]
+    if not keep_all_wdw:
+        del tmp_p["Windows"]
+        del tmp_n["Windows"]
+    # del tmp_p
+    # del tmp_n
+    return tmp_a
 
 @action
 def generatePredictionTripletsReverse(anchor: Tuple[tf.data.Dataset, tf.data.Dataset],
@@ -237,6 +262,7 @@ def generatePredictionTripletsReverse(anchor: Tuple[tf.data.Dataset, tf.data.Dat
 def GenerateGrayTriplets(anchor: DataManager,
                          positive: DataManager,
                          negative: DataManager,
+                         keep_all: bool = False,
                          *args,
                          **kwargs) -> Dict[str, Dict[str, Any]]:
     logger, write_msg = kwargs["logger"], kwargs["write_msg"]
@@ -260,19 +286,40 @@ def GenerateGrayTriplets(anchor: DataManager,
     write_msg(f"n chosen: {idx_C}", level=LH.DEBUG)
     write_msg(f"dimension idx n chosen: {len(idx_C)}", level=LH.DEBUG)
 
+
+    TfDst_add = False
+    write_msg(f"Positive keys: {positive.keys()}")
+    if "TfDataset" in positive["Windows"].keys():
+        tmp_keep_TfDst_p = positive["Windows"]["TfDataset"]
+        tmp_keep_TfDst_n = negative["Windows"]["TfDataset"]
+        del positive["Windows"]["TfDataset"]
+        del negative["Windows"]["TfDataset"]
+        TfDst_add = True
+
+    write_msg(f"Positive keys: {positive.keys()}")
+
     buoni = positive.sub_select(idx_B, inplace=False)
     cattivi = negative.sub_select(idx_C, inplace=False)
+
     new_anchor = anchor.sub_select(idx_a, inplace=False)
     buoni_cattivi = ConcatenateNG([buoni, cattivi], label="BuoniCattivi", logger=logger)
     write_msg(f"{buoni.dft('Windows').shape[0]}")
     write_msg(f"{cattivi.dft('Windows').shape[0]}")
 
+    if TfDst_add:
+        positive["Windows"]["TfDataset"] = tmp_keep_TfDst_p
+        negative["Windows"]["TfDataset"] = tmp_keep_TfDst_n
+
     idx_B = tf.range(buoni.dft("Windows").shape[0])
     idx_C = tf.range(buoni.dft("Windows").shape[0], buoni.dft("Windows").shape[0]+cattivi.dft("Windows").shape[0])
+    # print(f"Keep value: {keep_all}")
+    if not keep_all:
+        del positive
+        del negative
     write_msg(f"p chosen: {idx_B.shape}", level=LH.DEBUG)
     write_msg(f"n chosen: {idx_C.shape}", level=LH.DEBUG)
     write_msg(f"Anchor expected labels shape: {anchor.dft('ExpectedLabel').shape}")
-    write_msg(f"{tf.where(anchor.dft('ExpectedLabel') == 0, idx_B, idx_C)}")
+    # write_msg(f"{tf.where(anchor.dft('ExpectedLabel') == 0, idx_B, idx_C)}")
 
     pos_net_samples_idx = tf.where(anchor.dft("ExpectedLabel") == 0, idx_B, idx_C)
     neg_net_samples_idx = tf.where(anchor.dft("ExpectedLabel") == 1, idx_B, idx_C)
@@ -308,3 +355,92 @@ def action_selector(obj, *args, **kwargs):
     else:
         raise Exception(f"{obj} action not found")
 
+@action
+def GoodBad_randomGray(*args,
+                        df: pd.DataFrame = None,
+                        exp_column: str = "op_id",
+                        wdw_column: str = "window",
+                        sep_column: str = "anomaly_window",
+                        new_column: str = "Dataset",
+                        gray_portions: List[float] = [0.1, 0.1],
+                        **kwargs) -> pd.DataFrame:
+    if df is None:
+        raise Exception("The dataframe passed is None")
+    # For each window if the anomaly flag is 1 then the dataset is bad
+    # otherwise it's in the good dataframe
+    good_df = df[df[sep_column] == 0].copy()
+    bad_df = df[df[sep_column] == 1].copy()
+
+    # randomly select from both the good and bad df entire windows that
+    # would becom gray
+    good_exp_wdw = np.vstack(good_df[[exp_column, wdw_column]].values,
+                             dtype=int, casting='unsafe')
+    good_idx = np.unique(good_exp_wdw, axis=0)
+    good_wdw = np.random.choice(np.arange(len(good_idx)),
+                                int(len(good_idx)*gray_portions[0]),
+                                replace=False)
+    good_wdw = good_idx[good_wdw]
+
+    bad_exp_wdw = np.vstack(bad_df[[exp_column, wdw_column]].values,
+                             dtype=int, casting='unsafe')
+    bad_idx = np.unique(bad_exp_wdw, axis=0)
+    bad_wdw = np.random.choice(np.arange(len(bad_idx)),
+                                int(len(bad_idx)*gray_portions[0]),
+                                replace=False)
+    bad_wdw = bad_idx[bad_wdw]
+
+    gray_wdw = np.concatenate([good_wdw, bad_wdw], axis=0)
+
+    good_df[new_column] = "good"
+    bad_df[new_column] = "bad"
+
+    # Where good df exp_column and wdw_column are inside the gray_wdw set
+    good_in_gray = np.isin(good_exp_wdw, gray_wdw)
+    good_in_gray = np.logical_and(good_in_gray[:, 0], good_in_gray[:, 1])
+    good_df[new_column] = np.where(good_in_gray, "gray", good_df[new_column])
+
+    bad_in_gray = np.isin(bad_exp_wdw, gray_wdw)
+    bad_in_gray = np.logical_and(bad_in_gray[:, 0], bad_in_gray[:, 1])
+    bad_df[new_column] = np.where(bad_in_gray, "gray", bad_df[new_column])
+
+    gray_df = pd.concat([
+            good_df[good_df[new_column] == "gray"],
+            bad_df[bad_df[new_column] == "gray"]
+        ])
+    good_df = good_df[good_df[new_column] != "gray"]
+    bad_df = bad_df[bad_df[new_column] != "gray"]
+
+    return pd.concat([good_df, bad_df, gray_df])
+
+@action
+def get_randomGray(*args,
+                   df: pd.DataFrame = None,
+                   timestep_clm: str = "timestamp",
+                   anomal_clm: str = "anomalous",
+                   wdw_size: int = 120,
+                   portion: List[float] = [0.1, 0.1],
+                   **kwargs) -> pd.DataFrame:
+    # Separate the df in good and bads bepending on the anomalous column
+    good_df = df[df[anomal_clm] == 0].copy()
+    bad_df = df[df[anomal_clm] == 1].copy()
+
+    good_df["Dataset"] = "good"
+    bad_df["Dataset"] = "bad"
+
+    # Identify how many samples we need from both datasets to respect the portion
+    # value
+    n_good = int(len(good_df)*portion[0])
+    n_bad = int(len(bad_df)*portion[1])
+
+    # Randomly extract windows from the good and bad datasets without replication
+    for i in range(n_good):
+        event = np.random.randint(wdw_size, len(good_df)-wdw_size)
+        # Get a random value with maximum wdw_size-1, this value identifies how
+        # many events to look behind the chosen event to start extracting, the
+        # number of events to extract aveter the chosen event is given by
+        # wdw_size - random_num - 1
+        random_num = np.random.randint(0, wdw_size-1)
+        start = event-random_num
+        end = start+wdw_size
+    raise Exception
+    return None

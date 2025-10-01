@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 """
 Main module
@@ -17,6 +28,7 @@ import pkg_resources
 import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import tensorflow as tf
 
 from SNN2.src.environment.conf import conf as env_conf
 from SNN2.src.util.strings import s
@@ -48,9 +60,13 @@ parser.add_argument("-D", "--debug", dest="debug", default=False,
 parser.add_argument("--reinforcement", dest="reinforcement", default=False,
                     action="store_true", help="Activate the flag to use Reinforcement learning during the training")
 parser.add_argument("--study", dest="study", default=False,
-                    action="store_false", help="Deactivate the flag to execute the study of the datasets")
+                    action="store_true", help="Deactivate the flag to execute the study of the datasets")
 parser.add_argument("-H", "--hash", dest="fix_hash", default=None,
                     action="store", help="Define a fixed hash")
+parser.add_argument("--inference", dest="inference", default=None,
+                    action="store", help="Activate the inference execution, if None no inference is executed, otherwise the value is the label to use")
+parser.add_argument("--extension", dest="extension", default=None,
+                    action="store", help="Activate the extension execution")
 
 def main():
     # Parse the arguments
@@ -76,23 +92,24 @@ def main():
     pm = PH.from_cfg(conf, io, logger=logger)
     if options.fix_hash is not None:
         pm.force_hash = options.fix_hash
-    ph = PkH(io, pm[s.appendix_key], logger, hash=pm.hash)
+    ph = PkH(io, pm[s.appendix_key], logger, hash=pm.hash,
+             unix_time=pm[s.unix_time])
 
     print("---- Environment configuration ----")
     env_conf(PH.filter(pm, s.param_Environment_type))
 
     print("---- Data PreProcessing ----")
-    pp = PP(PH.filter(pm, s.param_PreProcessing_type),
-            PH.filter(pm, s.param_action_type),
-            PH.filter(pm, s.param_flow_type),
-            ph, logger=logger)
+    with tf.device("cpu:0"):
+        pp = PP(PH.filter(pm, s.param_PreProcessing_type),
+                PH.filter(pm, s.param_action_type),
+                PH.filter(pm, s.param_flow_type),
+                ph, logger=logger)
 
     print("---- Data Study ----")
     if options.study:
         Study(PH.filter(pm, s.param_study_type), pp,
               PH.filter(pm, s.param_action_type),
               ph, logger=logger, hash=pm.hash)
-        raise Exception
 
     print("---- Model definition ----")
     model = MH(pm["ModelManager"],
@@ -104,6 +121,35 @@ def main():
                PH.filter(pm, s.param_lossParam_type),
                PH.filter(pm, s.param_numpyRng_type),
                ph, logger, pp=pp, hash=pm.hash, debug=options.debug)
+
+    if options.inference is not None:
+        print("---- Inference Cluster ----")
+        Exp.emb_inference(model, pp.data_prop['Windows']["TfDataset"],
+                          options.inference, ph)
+        print("---- Prediction triplet ----")
+        Exp.predict(model, pp.data_prop['TripletDst']["TfDataset"])
+        return 0
+        # objects = [pp.data_prop["Targets"],
+        #            pp.data_prop["ExpID"]]
+        # labels = ["BADDIFF-target",
+        #           "BADDIFF-ExpID"]
+        # for obj, lbl in zip(objects, labels):
+        #     ph.save(obj, f"object_{lbl}_test", unix_time=True)
+        # return 0
+        # Exp.emb_inference(model, pp.bads_prop['Windows']["TfDataset"],
+        #                   f"{options.inference}-only_bads", ph)
+        # Exp.emb_inference(model, pp.grays_prop['Windows']["TfDataset"],
+        #                   f"{options.inference}-only_diff", ph)
+        # objects = [pp.bads_prop["Targets"]["tf_values"],
+        #            pp.bads_prop["ExpID"]["tf_values"],
+        #            pp.grays_prop["Targets"]["tf_values"],
+        #            pp.grays_prop["ExpID"]["tf_values"]]
+        # labels = ["BAD-target",
+        #           "BAD-ExpID",
+        #           "DIFF-target",
+        #           "DIFF-ExpID"]
+        # for obj, lbl in zip(objects, labels):
+        #     ph.save(obj, f"object_{lbl}_test", unix_time=True)
 
     rl_model = None
     if options.reinforcement:
@@ -133,7 +179,8 @@ def main():
               PH.filter(pm, s.param_numpyRng_type),
               PH.filter(pm, s.param_RLEnvExitFunction_type),
               ph, logger=logger,
-              rl_model=rl_model)
+              rl_model=rl_model,
+              model_extension_name=options.extension)
 
     print("---- Fitting phase ----")
     exp.fit()

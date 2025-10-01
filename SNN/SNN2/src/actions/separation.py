@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 import ast
 from copy import deepcopy
@@ -24,11 +35,12 @@ def window_to_group(wdw: tf.Tensor,
                     **kwargs) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     logger, write_msg = kwargs["logger"], kwargs["write_msg"]
 
-    columns = range(wdw.shape[2])
+    write_msg(f"Windows: {wdw}", level=LH.DEBUG)
+    write_msg(f"Windows shp: {wdw.shape}", level=LH.DEBUG)
+    columns = range(wdw.shape[-1])
     good_indexes = np.arange(wdw.shape[0])
     gray_indexes = []
     bad_indexes = []
-    write_msg(f"Windows: {wdw}", level=LH.DEBUG)
     for column in columns:
         good_threshold, bad_threshold = feature_thresholds[column]
         write_msg(f"Column: {column}, thresholds: {(good_threshold, bad_threshold)}")
@@ -72,6 +84,156 @@ def window_to_group(wdw: tf.Tensor,
     write_msg(f"gray: {gray_indexes_intersection} len: {len(gray_indexes_intersection)}")
     return good_indexes_intersection, bad_indexes_intersection, gray_indexes_intersection
 
+@f_logger
+def window_to_group_mvno(wdw: tf.Tensor,
+                    feature_thresholds: List[Tuple[float, float]],
+                    **kwargs) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    logger, write_msg = kwargs["logger"], kwargs["write_msg"]
+
+    write_msg(f"Windows: {wdw}", level=LH.DEBUG)
+    write_msg(f"Windows shp: {wdw.shape}", level=LH.DEBUG)
+    if len(wdw.shape) == 1:
+        columns = range(1)
+    else:
+        columns = range(wdw.shape[-1])
+    write_msg(f"Columns: {columns}")
+    good_indexes = np.arange(wdw.shape[0])
+    gray_indexes = []
+    bad_indexes = []
+    for column in columns:
+        good_threshold, bad_threshold = feature_thresholds[column]
+        write_msg(f"Column: {column}, thresholds: {(good_threshold, bad_threshold)}")
+        # good_threshold = threshold[0]
+        # bad_threshold = threshold[1]
+        value = wdw
+        write_msg(f"Values taken into consideration: {value}", level=LH.DEBUG)
+        write_msg(f"Specific value taken into consideration: {value[0]}", level=LH.DEBUG)
+        # print("Running in disaggregated mode")
+
+        write_msg(f"Example bad_indexes: {tf.where(value >= bad_threshold)[:, 0]}")
+        write_msg(f"Example gray_indexes: {tf.where((good_threshold < value) & (value < bad_threshold))[:, 0]}")
+        gray_indexes.append(
+                    tf.unique(tf.where((good_threshold < value) & (value < bad_threshold))[:,0])[0].numpy()
+                )
+        bad_indexes.append(
+                    tf.unique(tf.where(value > bad_threshold)[:,0])[0].numpy()
+                )
+        write_msg(f"last gray_indexes: {gray_indexes}")
+        write_msg(f"last bad_indexes: {bad_indexes}")
+
+    maybe_bad = np.unique(np.concatenate(bad_indexes))
+    maybe_gray = np.unique(np.concatenate(gray_indexes))
+    write_msg(f"Maybe bad: {maybe_bad} len: {len(maybe_bad)}")
+    write_msg(f"Maybe gray: {maybe_gray} len: {len(maybe_gray)}")
+
+    bad_indexes_intersection = np.intersect1d(maybe_bad, good_indexes)
+    good_indexes = np.delete(good_indexes, np.argwhere(np.isin(good_indexes, maybe_bad)))
+    gray_indexes_intersection = np.intersect1d(maybe_gray, good_indexes)
+    good_indexes_intersection = np.delete(good_indexes, np.argwhere(np.isin(good_indexes, maybe_gray)))
+
+    assert (len(good_indexes_intersection) + len(bad_indexes_intersection) + len(gray_indexes_intersection)) == wdw.shape[0]
+    assert len(functools.reduce(np.intersect1d, [good_indexes_intersection, bad_indexes_intersection, gray_indexes_intersection])) == 0
+
+    write_msg(f"good: {good_indexes_intersection} len: {len(good_indexes_intersection)}")
+    write_msg(f"bad: {bad_indexes_intersection} len: {len(bad_indexes_intersection)}")
+    write_msg(f"gray: {gray_indexes_intersection} len: {len(gray_indexes_intersection)}")
+    return good_indexes_intersection, bad_indexes_intersection, gray_indexes_intersection
+
+
+@action
+@f_logger
+def windowsSeparation_mvno(properties: Dict[str, Dict[str, tf.Tensor]] = {},
+                           anomalous_threshold: Optional[Union[Dict[str, Tuple[float, float]], str]] = None,
+                           **kwargs) -> Tuple[Dict[str, Dict[str, tf.Tensor]], ...]:
+    """windowsSeparation.
+    Function used to separate the windows in the 3 groups, positive,
+    negative and difficult.
+    The result of the separation will be given back as a tuple contaning 4 elements
+    - List of windows tensors, [good.windows, difficult.windows, bad.windows]
+    - List of target tensors, [good.targets, difficult.targets, bad.targets]
+    - List of classes tensors, [good.classes, difficult.classes, bad.classes]
+      o For the good samples the class is 0, 2 for difficult cases and 1 for bad ones
+    - List of exp-labels tensors, [good.exp-labels, difficult.exp-labels, bad.exp-labels]
+      o Label is 0 if the sample is expected to be positive or 1 otherwise
+      The exp-label is decided using the anomalous target value
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    Tuple[List[tf.Tensor], List[tf.Tensor], List[tf.Tensor], List[tf.Tensor]]
+
+    """
+    logger, write_msg = kwargs["logger"], kwargs["write_msg"]
+
+    write_msg(f"Window Separation MVNO")
+
+    wdw = properties.dft("Windows")
+    trg = properties["Targets"]["tf_values"]
+
+    feature_thresholds = anomalous_threshold
+    if isinstance(anomalous_threshold, str):
+        if 'dict(' in anomalous_threshold:
+            anomalous_threshold = anomalous_threshold.replace('dict(','{')
+            anomalous_threshold = '}'.join(anomalous_threshold.rsplit(')', 1))
+        feature_thresholds = ast.literal_eval(anomalous_threshold)
+    write_msg(f"Threshold that needs to be applied: {feature_thresholds}")
+
+    if wdw is None:
+        raise Exception("The window tensor passed is None")
+    if trg is None:
+        raise Exception("The target tensor passed is None")
+
+    good_indexes_intersection, bad_indexes_intersection, gray_indexes_intersection = window_to_group_mvno(
+        trg, [feature_thresholds["anomalous"]], logger=logger)
+
+    def sub_properties(idx, obj_class, exp_label = None):
+        tmp_property = properties.sub_select(idx)
+        tmp_property["Classes"] = None
+        tmp_property["ExpectedLabel"] = None
+
+        # write_msg(f"Indexes applied: {tmp_property.dft('OriginIndexes')}")
+        write_msg(f"len(tmp_property['Targets']['tf_values']): {len(tmp_property['Targets']['tf_values'])}")
+        write_msg(f"tmp_property['Targets']['tf_values'] shape: {tmp_property['Targets']['tf_values'].shape}")
+        tmp_property["Classes"].set_default(tf.cast(
+                tf.fill(dims=(len(tmp_property["Targets"]["tf_values"])),
+                        value=obj_class),
+                tf.int8))
+        write_msg(f"Classes applied: {tmp_property['Classes']['tf_values']}")
+        exp_l = tf.cast(tf.where(tmp_property.dft("Targets") > 0, 1, 0), tf.int8)
+        if exp_label is not None:
+            exp_l = tf.cast(tf.fill(dims=(len(tmp_property.dft("Targets"))), value=exp_label),
+                            tf.int8)
+        tmp_property["ExpectedLabel"].set_default(exp_l)
+        write_msg(f"Expected Labels applied: {tmp_property['ExpectedLabel']['tf_values']}")
+        return tmp_property
+
+
+    write_msg(f"Good count: {len(good_indexes_intersection)}")
+    write_msg(f"Bads count: {len(bad_indexes_intersection)}")
+    write_msg(f"Difficult count: {len(gray_indexes_intersection)}")
+    goods_properties = sub_properties(good_indexes_intersection, 0, exp_label=0)
+    bads_properties = sub_properties(bad_indexes_intersection, 1, exp_label=1)
+    grays_properties = sub_properties(gray_indexes_intersection, 2)
+
+    write_msg(f"Good tf shape: {goods_properties.dft('Windows').shape}")
+    write_msg(f"Good tf shape: {goods_properties.dft('Targets').shape}")
+    write_msg(f"Good tf shape: {goods_properties.dft('Classes').shape}")
+    write_msg(f"Good tf shape: {goods_properties.dft('ExpectedLabel').shape}")
+    write_msg(f"Bad tf shape: {bads_properties.dft('Windows').shape}")
+    write_msg(f"Bad tf shape: {bads_properties.dft('Targets').shape}")
+    write_msg(f"Bad tf shape: {bads_properties.dft('Classes').shape}")
+    write_msg(f"Bad tf shape: {bads_properties.dft('ExpectedLabel').shape}")
+    write_msg(f"Difficult tf shape: {grays_properties.dft('Windows').shape}")
+    write_msg(f"Difficult tf shape: {grays_properties.dft('Targets').shape}")
+    write_msg(f"Difficult tf shape: {grays_properties.dft('Classes').shape}")
+    write_msg(f"Difficult tf shape: {grays_properties.dft('ExpectedLabel').shape}")
+
+    id, _, count = tf.unique_with_counts(grays_properties["ExpectedLabel"]["tf_values"])
+    write_msg(f"Difficult count: {(id.numpy(), count.numpy())}", level=LH.DEBUG)
+
+    return goods_properties, bads_properties, grays_properties
 
 @action
 @f_logger
@@ -135,7 +297,7 @@ def windowsSeparation_vmaf(properties: Dict[str, Dict[str, tf.Tensor]] = {},
         tmp_property["Classes"] = None
         tmp_property["ExpectedLabel"] = None
 
-        write_msg(f"Indexes applied: {tmp_property.dft('OriginIndexes')}")
+        # write_msg(f"Indexes applied: {tmp_property.dft('OriginIndexes')}")
         tmp_property["Classes"].set_default(tf.cast(
                 tf.fill(dims=(len(tmp_property["Targets"]["tf_values"])),
                         value=obj_class),
@@ -408,17 +570,27 @@ def TrnValTstSeparation(data: DataManager,
     write_msg(f"Val - Test intersection: {val_tst_int}")
     assert all([len(x) == 0 for x in intersections])
 
-    def sub_data(idx):
-        tmp_data = deepcopy(data)
-        for key in tmp_data:
-            write_msg(f"Gathering property: {key}")
-            tmp_data[key]["tf_values"] = tf.gather(tmp_data[key]["tf_values"], idx)
-            write_msg(f"{key}: {tmp_data[key]['tf_values']}")
-        return tmp_data
+    # def sub_data(idx):
+    #     tmp_data = deepcopy(data)
+    #     for key in tmp_data:
+    #         write_msg(f"Gathering property: {key}")
+    #         tmp_data[key]["tf_values"] = tf.gather(tmp_data[key]["tf_values"], idx)
+    #         write_msg(f"{key}: {tmp_data[key]['tf_values']}")
+    #     return tmp_data
+
+    TfDst_add = False
+    write_msg(f"Positive keys: {data.keys()}")
+    if "TfDataset" in data["Windows"].keys():
+        tmp_keep_TfDst_data = data["Windows"]["TfDataset"]
+        del data["Windows"]["TfDataset"]
+        TfDst_add = True
 
     training = data.sub_select(trn_idx)
     validation = data.sub_select(val_idx)
     test = data.sub_select(tst_idx)
+
+    if TfDst_add:
+        data["Windows"]["TfDataset"] = tmp_keep_TfDst_data
 
     training.log_dump("Training")
     validation.log_dump("Validation")

@@ -1,11 +1,12 @@
 #!/bin/bash
 
 root="results-CoNEXT-50Runs"
-#video=("Bunny" "Bottle" "Scarlet")
-video=("Bunny")
+#video=("Bunny" "Bottle" "ScarletV3")
+video=("ScarletV3")
 #vmaf=(80 90 99)
-vmaf=(80 90)
-date=$(date '+%d-%m-%Y')
+vmaf=(80 99)
+#date=$(date '+%d-%m-%Y')
+date="19-11-2023"
 prefix="comparison"
 
 while getopts "i:" OPTNAME
@@ -20,17 +21,16 @@ done
 #                ./bash/merge_and_plot.sh -i ${root} -a ${d} -v ${v} -R
 #        done
 #done
+#exit
 
-./bash/merge_vmaf_comparison.sh -i ${root} -d "Bottle" -p ${prefix}
-./bash/merge_vmaf_comparison.sh -i ${root} -d "Bunny" -p ${prefix}
-#./bash/merge_vmaf_comparison.sh -i ${root} -d "Scarlet" -p ${prefix}
+#./bash/merge_vmaf_comparison.sh -i ${root} -d "Bottle" -p ${prefix}
+#./bash/merge_vmaf_comparison.sh -i ${root} -d "Bunny" -p ${prefix}
+#./bash/merge_vmaf_comparison.sh -i ${root} -d "ScarletV3" -p ${prefix}
 
-#mv ${root}/${prefix}-Scarlet-${date} ${root}/${prefix}-Scarlet-${date}
+#exit
+#mv ${root}/${prefix}-ScarletV3-${date} ${root}/${prefix}-Scarlet-${date}
+#exit
 
-for d in Bunny Bottle; do
+for d in Scarlet; do
 		./bash/plot_merged.sh -f ${root}/${prefix}-${d}-${date} -o ${root}/${prefix}-${d}-${date}/plot -v ${d} -r
-done
-
-for d in Bunny Bottle; do
-		cp -u ${root}/${prefix}-${d}-${date}/plot/* ../../paperi/CoNext/figures/plots/${d}/
 done

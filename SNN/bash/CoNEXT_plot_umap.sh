@@ -1,8 +1,8 @@
 #!/bin/bash
 
 root="results-CoNEXT"
-#video=("Bottle" "Bunny" "Football" "Scarlet")
-video=("Bunny" "Scarlet")
+#video=("Bottle" "Bunny" "Football" "ScarletV3")
+video=("Bunny" "ScarletV3")
 approaches=("Trivial" "SL" "SL-RL")
 vmaf=(80 90 99)
 

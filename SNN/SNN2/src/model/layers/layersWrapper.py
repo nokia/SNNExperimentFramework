@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 import functools
 
@@ -15,6 +26,7 @@ from tensorflow.keras.layers import Conv2D
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.layers import Normalization
 from tensorflow.keras.layers import Lambda
+from tensorflow.keras.layers import Dropout
 
 from SNN2.src.decorators.decorators import layers, clayer
 
@@ -27,7 +39,23 @@ def lstm(n_nodes, *args, **kwargs) -> LSTM:
         n_nodes = int(n_nodes)
     if isinstance(kwargs["input_shape"], str):
         kwargs["input_shape"] = ast.literal_eval(kwargs["input_shape"])
+    if "dropout" in kwargs.keys() and isinstance(kwargs["dropout"], str):
+        kwargs["dropout"] = float(kwargs["dropout"])
+        assert 0 <= kwargs["dropout"] <= 1
+    if "recurrent_dropout" in kwargs.keys() and isinstance(kwargs["recurrent_dropout"], str):
+        kwargs["recurrent_dropout"] = float(kwargs["recurrent_dropout"])
+        assert 0 <= kwargs["recurrent_dropout"] <= 1
     return LSTM(n_nodes, *args, **kwargs)
+
+@clayer
+def dropout(rate, *args, **kwargs) -> Dropout:
+    if isinstance(rate, str):
+        rate = float(rate)
+    if isinstance(kwargs["noise_shape"], str):
+        kwargs["noise_shape"] = ast.literal_eval(kwargs["noise_shape"])
+    if isinstance(kwargs["seed"], str):
+        kwargs["seed"] = int(kwargs["seed"])
+    return Dropout(rate, *args, **kwargs)
 
 @clayer
 def flatten(*args, **kwargs) -> Flatten:

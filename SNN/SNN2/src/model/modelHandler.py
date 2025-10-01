@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 """
 class module
@@ -106,7 +117,8 @@ class DefaultModelHandler:
         self.write_msg("Model compiled")
         return self.model
 
-    def save(self, obj: Optional[Any] = None) -> None:
+    def save(self, obj: Optional[Any] = None,
+             extend: str = None) -> None:
         if self.debug:
             self.write_msg("Debug option active, not saving the model")
             return
@@ -117,21 +129,32 @@ class DefaultModelHandler:
 
         obj = self.model if obj is None else obj
 
-        path = FH.hash_path(self.output_weights, hash=self.hash)
+        if extend is not None:
+            path = FH.extend_path(self.output_weights, extend)
+            path = FH.hash_path(path, hash=self.hash)
+        else:
+            path = FH.hash_path(self.output_weights, hash=self.hash)
         obj.save_weights(path)
         self.write_msg("Model weights saved")
 
-    def load(self) -> None:
+    def load(self,
+             extend: str = None) -> None:
         if self.output_weights is None:
             raise Exception("An output weight file must be setted by the implementation object")
         if self.model_definition is None:
             raise Exception("A model must be provided")
 
-        path = FH.hash_path(self.output_weights, hash=self.hash)
+        if extend is not None:
+            path = FH.extend_path(self.output_weights, extend)
+            path = FH.hash_path(path, hash=self.hash)
+        else:
+            path = FH.hash_path(self.output_weights, hash=self.hash)
         if not FH.exists(path):
+            print(f"The weights file [{path}] does not exists, the model needs to be trained")
             self.write_msg("The weights file does not exists, the model needs to be trained")
             return
 
+        print(f"\nLoading weights from {path}\n")
         self.model_definition.load_weights(path)
         self.trained = True
         self.write_msg("Model weights loaded")

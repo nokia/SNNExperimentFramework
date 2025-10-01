@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
 
 import numpy as np
 import pandas as pd
@@ -8,8 +19,10 @@ import tensorflow as tf
 
 from SNN2.src.decorators.decorators import action, f_logger, timeit
 from sklearn.model_selection import train_test_split
-from typing import List, Optional, Tuple, Union, Any
+from typing import List, Optional, Tuple, Union, Any, Dict, Callable
 from SNN2.src.io.logger import LogHandler as LH
+from scipy.signal import welch
+from scipy.stats import entropy
 
 def df_none(df: Any) -> None:
     if df is None:
@@ -18,6 +31,7 @@ def df_none(df: Any) -> None:
 @action
 @timeit
 def load(*args, **kwargs) -> pd.DataFrame:
+    print(f"{args} - {kwargs}")
     return pd.read_csv(*args, **kwargs)
 
 @action
@@ -144,6 +158,16 @@ def dropColumns(*args, df: pd.DataFrame = None, axis=1, **kwargs) -> Union[pd.Da
     return df.drop(*args, axis=axis, **kwargs)
 
 @action
+def dropNaN(*args, df: pd.DataFrame = None, **kwargs) -> Union[pd.DataFrame, None]:
+    df_none(df)
+    return df.dropna(*args, **kwargs)
+
+@action
+def keepColumns(df: pd.DataFrame = None, columns: List[str]=[]) -> Union[pd.DataFrame, None]:
+    df_none(df)
+    return df[columns]
+
+@action
 def dropOutliers(*args,
                  df: pd.DataFrame = None,
                  threshold: float = 90.0,
@@ -174,3 +198,231 @@ def remove_over_threshold(*args,
     over_exp_ids = df[df[column] > threshold]["exp_id"].unique()
     return df[~df["exp_id"].isin(over_exp_ids)]
 
+
+def rolling_feature(df: pd.DataFrame,
+                    feature:str,
+                    frm_col:list,
+                    *args,
+                    function: Callable = None,
+                    group_id: str = 'id',
+                    **kwargs) -> pd.DataFrame:
+    """
+    Compute rolling feature for each id in the DataFrame
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to compute the feature on
+    feature : str
+        The name of the feature to compute
+    frm_col : list
+        The list of columns to compute the feature on
+    *args : list
+        Additional arguments to pass to the rolling function
+    **kwargs : dict
+        Additional keyword arguments to pass to the rolling function
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame with the new feature columns added
+    """
+    if function is None:
+        function = globals()[feature]
+    # Copy the dataframe in a new instance
+    new_df = df.copy()
+    new_col = [f"roll_{feature}_{col}" for col in frm_col]
+    new_df[new_col] = new_df.groupby(group_id).rolling(*args, **kwargs)[frm_col].apply(
+        function,
+        engine='cython',
+        raw=False
+    ).values
+    if feature == "entropy":
+        new_df[new_col] = new_df[new_col].replace(np.nan, 0)
+    return new_df
+
+@action
+def compute_roll_features(*args,
+                          df: Optional[pd.DataFrame] = None,
+                          operations: Optional[Dict[str, List[str]]] = None,
+                          window_size: Optional[int] = 120,
+                          time_col: Optional[str] = 'timestamp',
+                          groupby_col: Optional[str] = 'op_id') -> pd.DataFrame:
+    df_none(df)
+    if operations is None:
+        return df
+    for key, value in operations.items():
+        if key == "medcross":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.sum((np.diff(np.sign(np.array(x) - np.median(np.array(x)))) != 0).astype(int)),
+                                group_id = groupby_col, on=time_col)
+        if key == "spec_entr":
+            def spec_entropy(x):
+                freqs, psd = welch(np.array(x), fs=1.0, nperseg=window_size)
+                return np.trapz(psd, freqs)
+            df = rolling_feature(df, key, value, window_size,
+                                function = spec_entropy,
+                                group_id = groupby_col, on=time_col)
+        if key == "mean":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.mean(np.array(x)),
+                                group_id = groupby_col, on=time_col)
+        if key == "std":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.std(np.array(x)),
+                                group_id = groupby_col, on=time_col)
+        if key == "entropy":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.clip(entropy(x), 0.0, 1.0),
+                                group_id = groupby_col, on=time_col)
+        if key == "quan95":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.quantile(np.array(x), 0.95),
+                                group_id = groupby_col, on=time_col)
+        if key == "quan99":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.quantile(np.array(x), 0.99),
+                                group_id = groupby_col, on=time_col)
+        if key == "tot_connline":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.sum(np.abs(np.diff(np.array(x)))),
+                                group_id = groupby_col, on=time_col)
+        if key == "tot_energy":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.sum(np.square(np.array(x))),
+                                group_id = groupby_col, on=time_col)
+        if key == "max":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.max(np.array(x)),
+                                group_id = groupby_col, on=time_col)
+        if key == "meddiffmin":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.median(x) - np.min(x),
+                                group_id = groupby_col, on=time_col)
+        if key == "meddiffmax":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.median(np.array(x)) - np.max(np.array(x)),
+                                group_id = groupby_col, on=time_col)
+        if key == "medquan90":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.median(np.array(x)) - np.quantile(np.array(x), 0.90),
+                                group_id = groupby_col, on=time_col)
+        if key == "median":
+            df = rolling_feature(df, key, value, window_size,
+                                function = lambda x: np.median(np.array(x)),
+                                group_id = groupby_col, on=time_col)
+    return df
+
+@action
+def compute_lag_features(*args,
+                          df: Optional[pd.DataFrame] = None,
+                          lag_col: List[str] = None,
+                          window_size: Optional[int] = 120,
+                          time_col: Optional[str] = 'timestamp',
+                          groupby_col: Optional[str] = 'op_id') -> pd.DataFrame:
+    df_none(df)
+    df_none(lag_col)
+    new_df = df.copy()
+    new_col = [f"lag_{window_size}_{col}" for col in lag_col]
+    new_df[new_col] = new_df.groupby(groupby_col).shift(window_size)[lag_col].values
+    return new_df
+
+@action
+def compute_dayofweek(*args,
+                       df: Optional[pd.DataFrame] = None,
+                       in_col: str = None,
+                       out_col: str = None) -> pd.DataFrame:
+    df_none(df)
+    df_none(in_col)
+    df_none(out_col)
+    # Check if in_col is a datetime column
+    if df[in_col].dtype != 'datetime64[ns]':
+        df[in_col] = pd.to_datetime(df[in_col])
+
+    df[out_col] = df[in_col].dt.dayofweek
+    return df
+
+@action
+def add_window_column(*args,
+                      df: Optional[pd.DataFrame] = None,
+                      window_size: int = 120,
+                      time_col: str = 'timestamp',
+                      groupby_col: Optional[str] = 'op_id') -> pd.DataFrame:
+    df_none(df)
+    tmp_df = df.copy()
+    # For each group defined by groupby_col add a window column that
+    # starts from 1 and increments of 1 unity every window_size rows
+    tmp_df['window'] = tmp_df.groupby(groupby_col).cumcount() // window_size + 1
+    return tmp_df
+
+@action
+def group_standardize(*args,
+                      df: Optional[pd.DataFrame] = None,
+                      standardize_columns: List[str] = ['n_ul'],
+                      groupby_col: Optional[str] = 'op_id') -> pd.DataFrame:
+    normalized = df.copy()
+    groups = normalized.groupby(groupby_col)[standardize_columns]
+    mean_all = groups.transform("mean").values
+    std_all = groups.transform("std").values
+    for col, mean, std in zip(standardize_columns, mean_all.T, std_all.T):
+        std_zero_idx = np.any(std == 0)
+
+        if not std_zero_idx:
+            normalized[col] = (normalized[col].values - mean) / std
+        else:
+            normalized[col] = np.where(std == 0,
+                                       normalized[col].values - mean,
+                                       (normalized[col].values - mean) / std)
+            assert np.all(normalized[col].values[std == 0] == 0)
+    return normalized
+
+@action
+def drop_not_anomalous(*args,
+                       df: Optional[pd.DataFrame] = None,
+                       keep: List[Dict[str, Any]] = None,
+                       delta: int = 0,
+                       rewrite_op_id: bool = False) -> pd.DataFrame:
+    df_none(df)
+    res = None
+    if keep is None:
+        raise Exception("The keep dictionary is None")
+
+    op_id = 1
+    for item in keep:
+        op_id = item['op_id']
+        start, end = item['timeslot']
+        anomalous = item['anomalous']
+
+        tmp_df = df[df["op_id"] == op_id].copy()
+        slot_df = tmp_df[((tmp_df["timestamp"] >= start) & (tmp_df["timestamp"] <= end))]
+        if rewrite_op_id:
+            slot_df["op_id"] = op_id
+            op_id += 1
+        slot_df["anomalous"] = anomalous
+        if res is None:
+            res = slot_df
+        else:
+            res = pd.concat([res, slot_df], axis=0)
+
+    return res
+
+@action
+def drop_anomalous(*args,
+                   df: Optional[pd.DataFrame] = None,
+                   drop: Dict[int, List[Tuple[str, str]]] = None) -> pd.DataFrame:
+    df_none(df)
+    res = None
+    if drop is None:
+        raise Exception("The drop dictionary is None")
+
+    for key, value in drop.items():
+        tmp_df = df[df["op_id"] == key].copy()
+        for timeslot in value:
+            start, end = timeslot
+            slot_df = tmp_df[~((tmp_df["timestamp"] >= start) & (tmp_df["timestamp"] <= end))]
+            if res is None:
+                res = slot_df
+            else:
+                res = pd.concat([res, slot_df], axis=0)
+
+    return res
