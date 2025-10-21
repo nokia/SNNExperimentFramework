@@ -29,6 +29,7 @@ def main():
     dim: int = options.delimiter
     clm: str = options.column
 
+    print(input.path)
     df = pd.read_csv(input.path)
 
     phase_col = None

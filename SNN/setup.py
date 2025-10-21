@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='SNN',
-    version='0.2.0',
+    version='3.0.1',
     description='Siamese Neural Network self learning FrameWork',
     author='Mattia Milani',
     author_email='mattia.milani@nokia.com',
@@ -18,4 +18,3 @@ setup(
         'console_scripts': ["snn=SNN2.main:main"]
     }
 )
-

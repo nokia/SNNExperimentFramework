@@ -37,7 +37,12 @@ def main():
     ax = fig.add_subplot()
     ax.imshow(im)
     ax.grid(False)
-    ax.get_yaxis().set_visible(False)
+    #ax.get_yaxis().set_visible(False)
+    mplt.tick_params(
+            axis='y',
+            which='both',
+            left=False,
+            labelleft=False)
 
     colors= ["#4daf4a", "#377eb8","#e41a1c"]
     b_patch = mpatches.Patch(color=colors[0], label=r"$\hat{U}_{good}$")
@@ -48,6 +53,7 @@ def main():
                   labels=["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
     ax.tick_params(axis="x", labelsize=38)
     mplt.xlabel("SL Iteration", fontsize=38)
+    mplt.ylabel(r"$\hat{U}$ Distribution", fontsize=38)
 
     mplt.savefig(f"{output.path}/sankey_plt.png", dpi=400)
     mplt.savefig(f"{output.path}/sankey_plt.pdf", dpi=400)

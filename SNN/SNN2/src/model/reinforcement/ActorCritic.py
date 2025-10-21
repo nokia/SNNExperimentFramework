@@ -1,22 +1,10 @@
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Copyright (C) 2020 Mattia Milani <mattia.milani@nokia.com>
+# © 2024 Nokia
+# Licensed under the BSD 3 Clause license
+# SPDX-License-Identifier: BSD-3-Clause
 
 import ast
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
-from pandas.compat import F
 import tensorflow as tf
 from tensorflow._api.v2.random import shuffle
 from SNN2.src.model.callbacks.callbacksWrapper import Callback_Selector
@@ -120,4 +108,3 @@ class ACModelHandler(RLModelHandler):
                              epochs=self.current_training_epoch+self.training_epochs,
                              initial_epoch=self.current_training_epoch)
             self.current_training_epoch += self.training_epochs
-
