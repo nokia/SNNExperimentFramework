@@ -84,8 +84,6 @@ scikit-learn==1.6.1
 scipy==1.15.3
 seaborn==0.13.2
 six==1.17.0
-# Editable install with no version control (SNN==3.0.0)
--e /home/mattia/src/SNN2
 snowballstemmer==3.0.1
 Sphinx==8.1.3
 sphinx-rtd-theme==3.0.2
