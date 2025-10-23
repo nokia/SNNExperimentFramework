@@ -41,14 +41,16 @@ class defaultFlow:
         self.PklH = PklH
         pass
 
-    def apply_normalize(self, data, mean, std, label: str = "windows") -> DataManager:
-        return self.action_parm.get_handler("normalize")(
-                data.dft(label),
-                mean, std)
+    def apply_normalize(self, data, *args, label: str = "windows",
+                        technique: str = "normalize") -> DataManager:
+        return self.action_parm.get_handler(technique)(
+                data.dft(label), *args)
 
     def check_pkl_list(self, file_list: List[str]) -> Union[bool, None]:
         if self.PklH is None:
+            self.write_msg("Pickle handler not available")
             return None
+        self.write_msg(f"check_pkl_list {self.PklH.check(file_list[0])} for {file_list[0]}")
         return all([self.PklH.check(file) for file in file_list])
 
     def load_pkl_list(self, file_list: List[str], wrapper: Callable= None) -> Union[Tuple[Any, ...], None]:
@@ -61,7 +63,8 @@ class defaultFlow:
             wrapper = repeat
         return tuple([wrapper(self.PklH.load(file)) for file in file_list])
 
-    def save_pkl_dct(self, obj_dct: Dict[str, Any], wrapper: Callable = None) -> None:
+    def save_pkl_dct(self, obj_dct: Dict[str, Any], wrapper: Callable = None,
+                     **kwargs) -> None:
         if self.PklH is None:
             return None
 
@@ -70,7 +73,7 @@ class defaultFlow:
                 return obj
             wrapper = repeat
         for key, obj in obj_dct.items():
-            self.PklH.save(wrapper(obj), key)
+            self.PklH.save(wrapper(obj), key, **kwargs)
 
     def save_data(self,
                   datasets: List[DataManager],

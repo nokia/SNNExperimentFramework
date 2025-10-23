@@ -46,6 +46,7 @@ class SiameseEnv(DefaultModelHandler):
         self.trained = False
         self.margin_reset = self.params["margin_reset", True]
         self.random_margin = self.params["random_margin", True]
+        self.freeze_until = self.params["freeze_until", True] if self.params.check("freeze_until") else 0
         self.random_margin_lower = -1.0
         self.random_margin_higher = 1.0
         if self.random_margin:
@@ -62,6 +63,10 @@ class SiameseEnv(DefaultModelHandler):
                     inpt, self.define_model_output(self.emb, inpt, name="output")
                 )
         self.write_msg("Model initialized")
+
+        # If freeze_until is set then freeze the layers until the specified layer
+        if self.freeze_until > 0:
+            self.freeze_layers(self.freeze_until)
 
         # If the weights files exists then load those
         self.load()
@@ -112,6 +117,10 @@ class SiameseEnv(DefaultModelHandler):
         )
         self.write_msg("Distance layer initialized")
         return distances
+
+    def freeze_layers(self, layer_number: int) -> None:
+        for layer in self.emb.layers[:layer_number]:
+            layer.trainable = False
 
     def get_state(self) -> np.ndarray:
         return np.array([param.numpy() for param in self.loss_param_ref.values()])

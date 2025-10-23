@@ -106,7 +106,8 @@ class DefaultModelHandler:
         self.write_msg("Model compiled")
         return self.model
 
-    def save(self, obj: Optional[Any] = None) -> None:
+    def save(self, obj: Optional[Any] = None,
+             extend: str = None) -> None:
         if self.debug:
             self.write_msg("Debug option active, not saving the model")
             return
@@ -117,21 +118,32 @@ class DefaultModelHandler:
 
         obj = self.model if obj is None else obj
 
-        path = FH.hash_path(self.output_weights, hash=self.hash)
+        if extend is not None:
+            path = FH.extend_path(self.output_weights, extend)
+            path = FH.hash_path(path, hash=self.hash)
+        else:
+            path = FH.hash_path(self.output_weights, hash=self.hash)
         obj.save_weights(path)
         self.write_msg("Model weights saved")
 
-    def load(self) -> None:
+    def load(self,
+             extend: str = None) -> None:
         if self.output_weights is None:
             raise Exception("An output weight file must be setted by the implementation object")
         if self.model_definition is None:
             raise Exception("A model must be provided")
 
-        path = FH.hash_path(self.output_weights, hash=self.hash)
+        if extend is not None:
+            path = FH.extend_path(self.output_weights, extend)
+            path = FH.hash_path(path, hash=self.hash)
+        else:
+            path = FH.hash_path(self.output_weights, hash=self.hash)
         if not FH.exists(path):
+            print(f"The weights file [{path}] does not exists, the model needs to be trained")
             self.write_msg("The weights file does not exists, the model needs to be trained")
             return
 
+        print(f"\nLoading weights from {path}\n")
         self.model_definition.load_weights(path)
         self.trained = True
         self.write_msg("Model weights loaded")

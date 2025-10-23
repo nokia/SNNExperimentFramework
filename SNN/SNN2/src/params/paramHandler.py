@@ -44,6 +44,8 @@ class ParamHandler:
         itms_names = np.array([x[s.io_name_key] for x in items])
         itms_names = np.append(itms_names, list(io.objects.keys()))
         itms_str = np.array(['-'.join([x[s.param_value], x.get(s.param_action_args, ""), x.get(s.param_action_kwargs, "")]) for x in items])
+        itms_intr = np.array([re.findall(r"\{\![^\}]*\}", x) for x in itms_str], dtype=object)
+        itms_intr_idx = np.where([len(x) > 0 for x in itms_intr])
         itms_str = np.append(itms_str, ["-"]*len(list(io.objects.keys())))
         assert len(itms_names) == len(itms_str)
         itms_order = np.array([np.inf]*len(itms_str))
@@ -54,6 +56,7 @@ class ParamHandler:
         itms_objects = np.array([np.array([x.replace('{', '').replace('}', '') for x in y]) for y in itms_objects], dtype=object)
         itms_to_solve = np.array([len(x) for x in itms_objects])
         itms_order[itms_to_solve == 0] = 0
+        itms_order[itms_intr_idx] = 0
         changes = True
         counter = 0
         while changes:
@@ -67,7 +70,7 @@ class ParamHandler:
                 changes = True
             if len(solved_idx) == 0 and len(still_to_solve_idx) > 0:
                 print(still_to_solve)
-                print("csv_path" in itms_names)
+                print("dataset" in itms_names)
                 raise Exception(f"Was not possible to solve some names")
 
             itms_order[solved_idx] = counter+1
@@ -152,8 +155,9 @@ class ParamHandler:
         self.write_msg(f"Evaluating {pth}", level=LH.DEBUG)
         pth = re.sub(r"\\\{", r"\#", pth)
         pth = re.sub(r"\\\}", r"\$", pth)
+        self.write_msg(f"Evaluating-after sub: {pth}", level=LH.DEBUG)
         result = re.findall(r"\{[^\}]*\}", pth)
-        res = {x[0]: x[1] for x in self.evaluate_objs(result)}
+        res = {x[0].replace('!', ''): x[1] for x in self.evaluate_objs(result)}
         pth = pth.replace('!', '').format(**res)
         pth = pth.replace(r"\#", "{")
         pth = pth.replace(r"\$", "}")

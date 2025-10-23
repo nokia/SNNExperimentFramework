@@ -2,14 +2,13 @@
 # Licensed under the BSD 3 Clause license
 # SPDX-License-Identifier: BSD-3-Clause
 
-import tensorflow as tf
 import seaborn as sns
 import re
 import argparse
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
-from scipy.ndimage.interpolation import shift
+from scipy.ndimage import shift
 from SNN2.src.io.files import FileHandler as FH
 
 from SNN2.src.plot.plotter import plotter as plt
@@ -48,11 +47,13 @@ def plot_single_evolution(df: pd.DataFrame,
     # accuracy_output = f"{output}/RL_Weighted_accuracy_evolution_episode_{episode}{appendix}.pdf"
     # plot_weight_accuracy(df, accuracy_output, appendix=appendix, title=f"Accuracy evolution episode {episode}")
     accuracy_output = f"{output}/RL_margin_evolution_episode_{episode}{appendix}.pdf"
-    plot_margin(df, accuracy_output, appendix=appendix, title=r"$\eta_t$ evolution at convergence")
+    # plot_margin(df, accuracy_output, appendix=appendix, title=r"$\eta_t$ evolution at convergence")
+    plot_margin(df, accuracy_output, appendix=appendix)
     # conf_matrix_output=f"{output}/RL_confusion_matrix_evolution_episode{episode}{appendix}.pdf"
     # plot_confusion_matrix(df, conf_matrix_output, appendix=appendix, title=f"Confusion matrix evolution episode {episode}")
     action_prob_output = f"{output}/RL_action_probabilities_evolution_episode{episode}{appendix}.pdf"
-    plot_action_probability(df, action_prob_output, appendix=appendix, title=f"Act. p. evolution at convergence")
+    # plot_action_probability(df, action_prob_output, appendix=appendix, title=f"Act. p. evolution at convergence")
+    plot_action_probability(df, action_prob_output, appendix=appendix)
     # chosen_action_output =f"{output}/RL_action_chosen_evolution_episode{episode}{appendix}.pdf"
     # plot_action_chosen(df, chosen_action_output, appendix=appendix, title=f"Action chosen episode {episode}")
     # transition_matrix_output =f"{output}/RL_transition_matrix_episode{episode}{appendix}.csv"
@@ -155,7 +156,7 @@ def avg_reward(df: pd.DataFrame,
     # p.plot.text(0, avg_value+0.01, f"{avg_value}", fontsize=9)
     # if threshold is not None:
     #     p.plot.axhline(y=threshold, linestyle='dashed', linewidth=1.5, color='red')
-    p.set(ylabel="Avg Reward", title=title)
+    p.set(ylabel="Avg. Reward", title=title)
     p.save(output)
 
 def discount_rewards(rewards, gamma):
@@ -348,38 +349,38 @@ def multi_k_plot_accuracy(df: pd.DataFrame,
     p.save(output)
 
 
-def discounted_sum(gamma: float, x: tf.Tensor) -> tf.Tensor:
-    @tf.function
-    def aggregate(agg, x):
-        return gamma*agg + x
-    return tf.scan(aggregate, x)
+# def discounted_sum(gamma: float, x: tf.Tensor) -> tf.Tensor:
+#     @tf.function
+#     def aggregate(agg, x):
+#         return gamma*agg + x
+#     return tf.scan(aggregate, x)
 
-def multi_k_plot_mt(df: pd.DataFrame,
-                    output: str,
-                    appendix: Optional[str] = "",
-                    title: Optional[str] = "",
-                    **kwargs) -> None:
-    if FH.exists(output):
-        return
+# def multi_k_plot_mt(df: pd.DataFrame,
+#                     output: str,
+#                     appendix: Optional[str] = "",
+#                     title: Optional[str] = "",
+#                     **kwargs) -> None:
+#     if FH.exists(output):
+#         return
 
-    # tmp_df = df[df["Statistic"].isin(["RewardComAccuracy"])].copy()
-    # tmp_df["Value"] = tmp_df["Value"].apply(pd.to_numeric)
-    tmp_df = df[df["Statistic"].isin(["WeightedAccuracy"])].copy()
-    accuracies = state_to_ndarray(tmp_df["Value"].values).T
-    steps = tmp_df["Step"].values
-    new_df = pd.DataFrame()
-    for gamma in [0.5]:
-        acum_acc = []
-        for acc in accuracies:
-            accumulated = discounted_sum(gamma, tf.convert_to_tensor(acc)).numpy()[-1]
-            acum_acc.append(accumulated)
-        new_df = pd.concat([new_df, pd.DataFrame({"Step": steps, "Gamma": gamma, "Value": acum_acc})])
+#     # tmp_df = df[df["Statistic"].isin(["RewardComAccuracy"])].copy()
+#     # tmp_df["Value"] = tmp_df["Value"].apply(pd.to_numeric)
+#     tmp_df = df[df["Statistic"].isin(["WeightedAccuracy"])].copy()
+#     accuracies = state_to_ndarray(tmp_df["Value"].values).T
+#     steps = tmp_df["Step"].values
+#     new_df = pd.DataFrame()
+#     for gamma in [0.5]:
+#         acum_acc = []
+#         for acc in accuracies:
+#             accumulated = discounted_sum(gamma, tf.convert_to_tensor(acc)).numpy()[-1]
+#             acum_acc.append(accumulated)
+#         new_df = pd.concat([new_df, pd.DataFrame({"Step": steps, "Gamma": gamma, "Value": acum_acc})])
 
-    p = plt(new_df, format=["pdf", "png"])
-    p("line", x="Step", y="Value", hue="Gamma", **kwargs)
-    p.set(ylim=(1.86,1.87), ylabel="Acc. Comulative sum (M_t)", title=title)
-    p.move_legend("lower center", bbox_to_anchor=(0.5, -0.42), ncol=4)
-    p.save(output)
+#     p = plt(new_df, format=["pdf", "png"])
+#     p("line", x="Step", y="Value", hue="Gamma", **kwargs)
+#     p.set(ylim=(1.86,1.87), ylabel="Acc. Comulative sum (M_t)", title=title)
+#     p.move_legend("lower center", bbox_to_anchor=(0.5, -0.42), ncol=4)
+#     p.save(output)
 
 def plot_accuracy(df: pd.DataFrame,
                   output: str,
@@ -560,7 +561,7 @@ def plot_action_probability(df: pd.DataFrame,
     p = plt(new_df, format=["pdf", "png"], palette=cm)
     p.sns_set(font_scale=2.4)
     p.sns_set_api(sns.set_style, "white")
-    p("line", x="Step", y="Value", hue="Action", linewidth=2.0, **kwargs)
+    p("line", x="Step", y="Value", hue="Action", style="Action", linewidth=2.0, **kwargs)
     p.set(ylabel="Probability [0-1]", ylim=(0.1, 0.7), title=title)
     p.move_legend("upper center", ncol=3, fontsize='20', title_fontsize='25')
     p.save(output)
@@ -678,21 +679,23 @@ def main():
     cm = sns.color_palette(colors)
     rcParams['figure.figsize'] = 8,4
 
-    for ep in df["Episode"].unique():
-        prt = False
-        if len(df["Episode"].unique()) < 200:
-            prt = True
-        elif ep % 5 == 0:
-            prt = True
+    # for ep in df["Episode"].unique():
+    #     prt = False
+    #     if len(df["Episode"].unique()) < 200:
+    #         prt = True
+    #     elif ep % 5 == 0:
+    #         prt = True
 
-        if prt:
-            plot_single_evolution(df, output, episode=ep, appendix=appendix)
+    #     if prt:
+    #         plot_single_evolution(df, output, episode=ep, appendix=appendix)
+    plot_single_evolution(df, output, episode=69, appendix=appendix)
 
     reward_output=f"{output}/RL_averageReward_evolution_{appendix}.pdf"
     last_stp = -1
     gray_limit = 10
     threshold = None
-    avg_reward(df, reward_output, threshold=threshold, gray_limit=gray_limit, appendix=appendix, last_step=last_stp, title=f"RL-training, Avg Reward evolution")
+    # avg_reward(df, reward_output, threshold=threshold, gray_limit=gray_limit, appendix=appendix, last_step=last_stp, title=f"RL-training, Avg Reward evolution")
+    avg_reward(df, reward_output, threshold=threshold, gray_limit=gray_limit, appendix=appendix, last_step=last_stp, title="")
     # reward_output=f"{output}/RL_sumReward_evolution_{appendix}.pdf"
     # sum_reward(df, reward_output, threshold=threshold, gray_limit=gray_limit, appendix=appendix, last_step=last_stp, title=f"Sum(r_t) for each episode")
     # reward_output=f"{output}/RL_AreaUnderCurve_evolution_{appendix}.pdf"

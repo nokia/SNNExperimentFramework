@@ -1,7 +1,18 @@
 #!/usr/bin/env python
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the graphNU grapheneral Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# graphNU grapheneral Public License for more details.
+#
+# You should have received a copy of the graphNU grapheneral Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2021 Mattia Milani <mattia.milani@nokia.com>
 
 """
 Fit function Wrapper
@@ -23,6 +34,9 @@ from SNN2.src.io.logger import LogHandler as LH
 from SNN2.src.actions.actionWrapper import action_selector as AS
 from SNN2.src.util.helper import dst2tensor
 from SNN2.src.decorators.decorators import f_logger, train_enhancement, grays
+from SNN2.src.model.layers.tf_cure import TfCURE
+from SNN2.src.model.layers.tf_cure.tf_cluster import pp_dst, static_select_representors
+from SNN2.src.io.pickleHandler import PickleHandler as PH
 
 from typing import Generator, Tuple, Callable, Union, Any, Optional
 
@@ -54,6 +68,19 @@ def prediction_flag(distances: Tuple[np.ndarray, np.ndarray],
     flags = tf.cast(flags, tf.int8)
     return flags, distances
 
+@tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.float32),
+                              tf.TensorSpec(shape=[None], dtype=tf.float32),
+                              tf.TensorSpec(shape=[], dtype=tf.float32)])
+def tf_prediction_flag(ap: tf.Tensor, an: tf.Tensor,
+                       margin: tf.Tensor) -> tf.Tensor:
+    diff = tf.math.subtract(ap, an)
+    flags = tf.where(tf.math.less_equal(diff,
+                                        tf.negative(margin)), 0, 2)
+    flags = tf.where(tf.math.greater(diff, margin), 1, flags)
+    flags = tf.cast(flags, tf.int8)
+    return flags
+
+
 def save_gray_stats(correct: tf.Tensor,
                     wrong: tf.Tensor,
                     output: str,
@@ -81,6 +108,13 @@ def save_gray_stats(correct: tf.Tensor,
         df.to_csv(output, mode="a", header=False, index=False)
     else:
         df.to_csv(output, mode="a", header=True, index=False)
+
+def save_representors(points: tf.Tensor,
+                      output: str,
+                      ph: PH,
+                      label: str = "Representors") -> None:
+        output = output + f"_{label}"
+        ph.save(points.numpy(), output, unix_time=True)
 
 def save_gray_predictions(predictions: tf.Tensor,
                           distances: Tuple[np.ndarray, np.ndarray],
@@ -201,7 +235,14 @@ def regenerate_gray_triplets(predicted_flags: tf.Tensor,
 
     # sub_idx = compute_sub_idx(predicted_flags)
     sub_idx = __where(predicted_flags != 2)
+
+    # write_msg(f"gray_samples TripletDst: {gray_samples['Windows']}", level=LH.DEBUG)
+    # raise Exception
+    #
+    # tmp_keep_TfDst = gray_samples["TripletDst"]["TfDataset"]
+    # del gray_samples["TripletDst"]["TfDataset"]
     sure_grays = gray_samples.sub_select(sub_idx.numpy())
+    # gray_samples["TripletDst"]["TfDataset"] = tmp_keep_TfDst
     sure_flags = tf.gather(predicted_flags, sub_idx)
     # gray_samples, predicted_flags = remove_undecided(gray_samples, predicted_flags)
     sure_grays.log_dump("Sure grays")
@@ -222,7 +263,11 @@ def regenerate_gray_triplets(predicted_flags: tf.Tensor,
     #             tf.data.Dataset.from_tensor_slices(predicted_flags)
     #         )
 
-    return tripletGenerator(sure_grays, goodSamples, badSamples, logger=logger)
+    # print(f"regenerate - 1 - good:\n{goodSamples['Windows'].keys()}")
+    trplt = tripletGenerator(sure_grays, goodSamples, badSamples, logger=logger, keep_all=True)
+    # print(f"regenerate - 2 - good:\n{goodSamples['Windows'].keys()}")
+    # raise Exception
+    return trplt
 
 @f_logger
 def merge_triplets(new_data: DataManager,
@@ -232,8 +277,8 @@ def merge_triplets(new_data: DataManager,
                    **kwargs) -> tf.data.Dataset:
     logger, write_msg = kwargs["logger"], kwargs["write_msg"]
 
-    new_data.log_dump("New Data")
-    old_data.log_dump("Old Data")
+    # new_data.log_dump("New Data")
+    # old_data.log_dump("Old Data")
 
     new_dst = new_data["TripletDst"]["TfDataset"]
     old_dst = old_data["TripletDst"]["TfDataset"]
@@ -405,19 +450,21 @@ def gray_update_margin_general(model,
 
     while True:
         write_msg("---- Grays evaluation, training dataset enhancement----")
+        # print(f"1 - good:\n{good['Windows'].keys()}")
+
         current_margin = round(model.state[0], 1) if not margin_flag else margin
         write_msg(f"Current model margin: {current_margin}")
         # Predict the grays distances and obtain the class flags
         dst = pred_gray_triplets["TripletDst"]["TfDataset"].batch(100)
         write_msg(f"DST: {dst}", level=LH.DEBUG)
+        gray.log_dump("Gray samples")
         predicted_flags, predicted_distances = prediction_flag(predict(model.model, dst, verbose=verbose), margin=current_margin)
         write_msg(f"Prediction flags: {predicted_flags}")
-        write_msg(f"Prediction distances: {predicted_distances}")
-
         correct = tf.reshape(tf.gather(predicted_flags, tf.where(predicted_flags == gray.dft("ExpectedLabel"))), [-1])
         wrong = tf.reshape(tf.gather(predicted_flags, tf.where(predicted_flags != gray.dft("ExpectedLabel"))), [-1])
         write_msg(f"Correct: {correct}", level=LH.DEBUG)
         write_msg(f"Wrong: {wrong}", level=LH.DEBUG)
+        # print(f"2 - good:\n{good['Windows'].keys()}")
 
         id, _, count = tf.unique_with_counts(correct)
         write_msg(f"Correct labels - {len(correct)}: {(id.numpy(), count.numpy())}", level=LH.DEBUG)
@@ -431,6 +478,7 @@ def gray_update_margin_general(model,
         np.set_printoptions(formatter={'float_kind':'{:f}'.format})
         write_msg(f"Example of triplets pred_gray_triplets:\n{np.round(dst2tensor(dst.take(2)).numpy(), 3)}", level=LH.DEBUG)
         np.set_printoptions()
+        # print(f"3 - good:\n{good['Windows'].keys()}")
 
         gray_triplets = regenerate_gray_triplets(predicted_flags,
                                                  gray,
@@ -438,10 +486,137 @@ def gray_update_margin_general(model,
                                                  good,
                                                  bad,
                                                  logger=logger)
-        gray_triplets.log_dump("Sure grays triplets")
+        # print(f"4 - good:\n{good['Windows'].keys()}")
+        # gray_triplets.log_dump("Sure grays triplets")
 
+        merged = merge_triplets(gray_triplets, training_triplets, batch_size=batch_size, logger=logger)
         # Return the new training dataset.
-        yield merge_triplets(gray_triplets, training_triplets, batch_size=batch_size, logger=logger)
+        # print(f"5 - good:\n{good['Windows'].keys()}")
+        yield merged
+
+def get_emb(model: Model,
+            data: tf.Tensor,
+            n_samples: Optional[int] = None) -> tf.Tensor:
+    """get_emb.
+
+    Get the embeddings representation of an input.
+
+    Parameters
+    ----------
+    model: Model
+        The model to use for the embeddings.
+    data: tf.Tensor
+        The data to embed.
+    n_samples: Optional[int]
+        The number of samples to take. if None all the samples are taken.
+    """
+    n_samples = data.shape[0] if n_samples is None else n_samples
+
+    # if n_sample is higher than the data shape, take all the data
+    n_samples = data.shape[0] if n_samples > data.shape[0] else n_samples
+
+    # Get randomly n_samples
+    idx = tf.random.shuffle(tf.range(data.shape[0]))[:n_samples]
+    data = tf.gather(data, idx, axis=0)
+
+    return model.emb(data)
+
+@train_enhancement
+@f_logger
+def gray_update_margin_general_cure(model,
+                                    pred_gray_triplets: DataManager,
+                                    good: DataManager,
+                                    bad: DataManager,
+                                    training_triplets: DataManager,
+                                    gray: DataManager,
+                                    GrayTripletsGenerator: Callable,
+                                    *args,
+                                    margin: Union[float, str] = 0.0,
+                                    fixedMarginFlag: Union[bool, str] = False,
+                                    gray_stats_output: Optional[str] = None,
+                                    gray_prediction_output: Optional[str] = None,
+                                    gray_representors_output: Optional[str] = None,
+                                    batch_size: Union[int, str] = 0,
+                                    n_reps: int = 5,
+                                    n_samples_centr: int = 1000,
+                                    verbose: int = 0,
+                                    compression_factor: float = 0.5,
+                                    ph: PH = None,
+                                    **kwargs) -> Generator:
+    logger, write_msg = kwargs["logger"], kwargs["write_msg"]
+
+    if gray_stats_output is None:
+        raise Exception("An output CSV file for the grays stats must be provided")
+
+    batch_size: int = convert(batch_size, int) if isinstance(batch_size, str) else batch_size
+    n_reps: int = convert(n_reps, int) if isinstance(n_reps, str) else n_reps
+    margin: float = convert(margin, float) if isinstance(margin, str) else margin
+    margin_flag: bool = convert(fixedMarginFlag, bool) if isinstance(fixedMarginFlag, str) else fixedMarginFlag
+    i = 0
+
+    while True:
+        write_msg("---- Grays evaluation CURE, training dataset enhancement----")
+        # Compute good and bad embeddings
+        good_emb = get_emb(model, good["Windows"]["tf_values"], n_samples=n_samples_centr)
+        bad_emb = get_emb(model, bad["Windows"]["tf_values"], n_samples=n_samples_centr)
+
+        # Compute the embeddings of the difficult samples
+        diff_emb = get_emb(model, gray["Windows"]["tf_values"])
+
+        if n_reps > 0:
+            # Compute centroids
+            g_rep = static_select_representors(good_emb, tf.constant(n_reps))
+            b_rep = static_select_representors(bad_emb, tf.constant(n_reps))
+            g_rep += compression_factor * (tf.reduce_mean(good_emb, axis=0) - g_rep)
+            b_rep += compression_factor * (tf.reduce_mean(bad_emb, axis=0) - b_rep)
+
+            g_rep = tf.concat([g_rep, tf.reduce_mean(good_emb, axis=0, keepdims=True)], 0)
+            b_rep = tf.concat([b_rep, tf.reduce_mean(bad_emb, axis=0, keepdims=True)], 0)
+        else:
+            g_rep = tf.reduce_mean(good_emb, axis=0, keepdims=True)
+            b_rep = tf.reduce_mean(bad_emb, axis=0, keepdims=True)
+
+        save_representors(g_rep, f"{gray_representors_output}_iteration_{i}", ph, label="Good")
+        save_representors(b_rep, f"{gray_representors_output}_iteration_{i}", ph, label="Bad")
+        i+=1
+
+        # Compute the distance between the dificult samples and all the clusters
+        diff_good_dst = tf.math.reduce_min(pp_dst(diff_emb, g_rep), axis=0)
+        diff_bad_dst = tf.math.reduce_min(pp_dst(diff_emb, b_rep), axis=0)
+
+        # Identify the label for each of the samples
+        current_margin = round(model.state[0], 1) if not margin_flag else margin
+        write_msg(f"Current model margin: {current_margin}")
+        predicted_flags = tf_prediction_flag(diff_good_dst, diff_bad_dst, tf.constant(current_margin))
+        predicted_distances = (diff_good_dst.numpy(), diff_bad_dst.numpy())
+        write_msg(f"Prediction flags: {predicted_flags}")
+
+        # Evaluate correctness
+        correct = tf.reshape(tf.gather(predicted_flags, tf.where(predicted_flags == gray.dft("ExpectedLabel"))), [-1])
+        wrong = tf.reshape(tf.gather(predicted_flags, tf.where(predicted_flags != gray.dft("ExpectedLabel"))), [-1])
+        write_msg(f"Correct: {correct}", level=LH.DEBUG)
+        write_msg(f"Wrong: {wrong}", level=LH.DEBUG)
+        # Regenerate the training dataset with also this new gray data according to the new labels
+        id, _, count = tf.unique_with_counts(correct)
+        write_msg(f"Correct labels - {len(correct)}: {(id.numpy(), count.numpy())}", level=LH.DEBUG)
+        id, _, count = tf.unique_with_counts(wrong)
+        write_msg(f"Wrong labels - {len(wrong)}: {(id.numpy(), count.numpy())}", level=LH.DEBUG)
+
+        save_gray_stats(correct, wrong, gray_stats_output, undecided=True)
+        if gray_prediction_output is not None:
+            save_gray_predictions(predicted_flags, predicted_distances, gray_prediction_output)
+
+        gray_triplets = regenerate_gray_triplets(predicted_flags,
+                                                 gray,
+                                                 GrayTripletsGenerator,
+                                                 good,
+                                                 bad,
+                                                 logger=logger)
+
+        merged = merge_triplets(gray_triplets, training_triplets, batch_size=batch_size, logger=logger)
+
+        yield merged
+
 
 @train_enhancement
 def gray_update_margin_freeze(model: Model,

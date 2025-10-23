@@ -5,7 +5,6 @@
 import ast
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
-from pandas.compat import F
 import tensorflow as tf
 from tensorflow._api.v2.random import shuffle
 from SNN2.src.model.callbacks.callbacksWrapper import Callback_Selector
@@ -109,4 +108,3 @@ class ACModelHandler(RLModelHandler):
                              epochs=self.current_training_epoch+self.training_epochs,
                              initial_epoch=self.current_training_epoch)
             self.current_training_epoch += self.training_epochs
-

@@ -112,20 +112,31 @@ class DataObject(UserDict):
         raise Exception(f"object {object} subset not supported for type {type(object)}")
 
     def sub_select(self, indexes: np.ndarray) -> DataObject:
+        self.write_msg(f"keys: {list(self.keys())}")
         tmp_obj = deepcopy(self)
-        exclude_clm = ["columns", "post_operation", "post_operation_args", "post_operation_kwargs"]
+        exclude_clm = ["columns", "post_operation", "post_operation_args", "post_operation_kwargs",
+                       "TfDataset"]
         # self.write_msg(f"current columns: {tmp_obj.keys()}")
         # self.write_msg(f"Values as np: {tmp_obj['Values']}")
         # self.write_msg(f"Values as dft: {tmp_obj.dft()}")
         # self.write_msg(f"Shape Values: {tmp_obj.dft().shape}")
         # self.write_msg(f"Shape Values as np: {tmp_obj['Values'].shape}")
-        if "Values" in tmp_obj.keys() and tmp_obj["Values"].shape != tmp_obj.dft().shape:
-            self.write_msg(f"Super imposing the dft values over the numpy values")
-            tmp_obj["Values"] = tmp_obj.dft().numpy()
+        dft_obj = tmp_obj.dft()
+        if isinstance(dft_obj, List):
+            dft_obj = dft_obj[0]
+
+        if "Values" in tmp_obj.keys() and tmp_obj["Values"].shape != dft_obj.shape:
+            # self.write_msg(f"Super imposing the dft values over the numpy values")
+            # raise Exception("VALUES SHOULD NOT BE IN THE OBJECT, do not keep the numpy alternative")
+            tmp_obj["Values"] = dft_obj.numpy()
         for clm in tmp_obj.keys():
             if clm not in exclude_clm:
                 self.write_msg(f"Available items in {clm}: {len(tmp_obj[clm]) if not isinstance(tmp_obj[clm], (tf.DType, type)) else 'no len'}")
-                tmp_obj[clm] = self.__sub_set(tmp_obj[clm], indexes)
+                if isinstance(tmp_obj[clm], List):
+                    self.write_msg(f"Subsetting {clm} as list")
+                    tmp_obj[clm] = [self.__sub_set(obj, indexes) for obj in tmp_obj[clm]]
+                else:
+                    tmp_obj[clm] = self.__sub_set(tmp_obj[clm], indexes)
         return tmp_obj
 
     def __concat(self, key, other_obj) -> None:
@@ -197,11 +208,12 @@ class DataManager(UserDict):
         return self.data[item]
 
     def sub_select(self, indexes: np.ndarray, inplace: bool = False) -> DataManager:
+        self.write_msg(f"keys: {self.keys()}")
         tmp_obj = deepcopy(self) if not inplace else self
         for key in tmp_obj:
             tmp_obj[key] = tmp_obj[key].sub_select(indexes)
-        tmp_obj["OriginIndexes"] = None
-        tmp_obj["OriginIndexes"].set_default(tf.convert_to_tensor(indexes))
+        # tmp_obj["OriginIndexes"] = None
+        # tmp_obj["OriginIndexes"].set_default(tf.convert_to_tensor(indexes))
         return tmp_obj
 
     def to_dict(self) -> Dict[str, Any]:
@@ -212,13 +224,16 @@ class DataManager(UserDict):
 
     def transform_toDataset(self, inplace: bool = False,
                             label: Optional[str] = None,
-                            keys: Optional[List[str]] = None) -> DataManager:
+                            keys: Optional[List[str]] = None,
+                            limit: Optional[int] = None) -> DataManager:
         tmp_obj = deepcopy(self) if not inplace else self
         keys = list(tmp_obj.keys()) if keys is None else keys
         label = self.default_field if label is None else label
 
         for key in keys:
             tmp_obj[key][label] = tf.data.Dataset.from_tensor_slices(tmp_obj.dft(key))
+            if not limit is None:
+                tmp_obj[key][label] = tmp_obj[key][label].take(limit)
         return tmp_obj
 
     def concat(self, other: DataManager) -> None:
@@ -243,21 +258,30 @@ class DataManager(UserDict):
     def log_dump(self, label: str) -> None:
         self.write_msg(f"Dump of {label} object")
         for p in self:
-            self.write_msg(f"{label}[{p}]: {self.dft(p)}", level=LH.DEBUG)
-            self.write_msg(f"len({label}[{p}]): {len(self.dft(p))}", level=LH.DEBUG)
-            self.write_msg(f"{label}[{p}].dtype: {self.dft(p).dtype}", level=LH.DEBUG)
-            self.write_msg(f"{label}[{p}] shape: {tf.shape(self.dft(p))}", level=LH.DEBUG)
-            if self.dft(p).dtype is tf.string:
+            if (self.default_field is None) or \
+                    (self[p].default_field == "TfDataset"):
+                continue
+
+            tmp_dft = self.dft(p)
+
+            if isinstance(tmp_dft, List):
+                tmp_dft = self.dft(p)[0]
+
+            self.write_msg(f"{label}[{p}]: {tmp_dft}", level=LH.DEBUG)
+            self.write_msg(f"len({label}[{p}]): {len(tmp_dft)}", level=LH.DEBUG)
+            self.write_msg(f"{label}[{p}].dtype: {tmp_dft.dtype}", level=LH.DEBUG)
+            self.write_msg(f"{label}[{p}] shape: {tf.shape(tmp_dft)}", level=LH.DEBUG)
+            if tmp_dft.dtype is tf.string:
                 pass
-            elif self.dft(p).shape[0] == 0:
+            elif tmp_dft.shape[0] == 0:
                 self.write_msg(f"{label}[{p}] is Empty", level=LH.DEBUG)
-            elif len(tf.shape(self.dft(p)).numpy()) == 1:
-                id, _, count = tf.unique_with_counts(self.dft(p))
+            elif len(tf.shape(tmp_dft).numpy()) == 1:
+                id, _, count = tf.unique_with_counts(tmp_dft)
                 self.write_msg(f"{label}[{p}] unique values: {id.numpy(), count.numpy()}", level=LH.DEBUG)
-                self.write_msg(f"{label}[{p}] minimum: {tf.math.reduce_min(self.dft(p))}", level=LH.DEBUG)
-                self.write_msg(f"{label}[{p}] maximum: {tf.math.reduce_max(self.dft(p))}", level=LH.DEBUG)
+                self.write_msg(f"{label}[{p}] minimum: {tf.math.reduce_min(tmp_dft)}", level=LH.DEBUG)
+                self.write_msg(f"{label}[{p}] maximum: {tf.math.reduce_max(tmp_dft)}", level=LH.DEBUG)
                 if "ExpectedLabel" in self:
-                    self.write_msg(f"{label}[{p}] expected positives minimum: {tf.math.reduce_min(tf.gather(self.dft(p), tf.where(self['ExpectedLabel']['tf_values'] == 0)[:, 0]))}", level=LH.DEBUG)
-                    self.write_msg(f"{label}[{p}] expected positives maximum: {tf.math.reduce_max(tf.gather(self.dft(p), tf.where(self['ExpectedLabel']['tf_values'] == 0)[:, 0]))}", level=LH.DEBUG)
-                    self.write_msg(f"{label}[{p}] expected negatives minimum: {tf.math.reduce_min(tf.gather(self.dft(p), tf.where(self['ExpectedLabel']['tf_values'] == 1)[:, 0]))}", level=LH.DEBUG)
-                    self.write_msg(f"{label}[{p}] expected negatives maximum: {tf.math.reduce_max(tf.gather(self.dft(p), tf.where(self['ExpectedLabel']['tf_values'] == 1)[:, 0]))}", level=LH.DEBUG)
+                    self.write_msg(f"{label}[{p}] expected positives minimum: {tf.math.reduce_min(tf.gather(tmp_dft, tf.where(self['ExpectedLabel']['tf_values'] == 0)[:, 0]))}", level=LH.DEBUG)
+                    self.write_msg(f"{label}[{p}] expected positives maximum: {tf.math.reduce_max(tf.gather(tmp_dft, tf.where(self['ExpectedLabel']['tf_values'] == 0)[:, 0]))}", level=LH.DEBUG)
+                    self.write_msg(f"{label}[{p}] expected negatives minimum: {tf.math.reduce_min(tf.gather(tmp_dft, tf.where(self['ExpectedLabel']['tf_values'] == 1)[:, 0]))}", level=LH.DEBUG)
+                    self.write_msg(f"{label}[{p}] expected negatives maximum: {tf.math.reduce_max(tf.gather(tmp_dft, tf.where(self['ExpectedLabel']['tf_values'] == 1)[:, 0]))}", level=LH.DEBUG)

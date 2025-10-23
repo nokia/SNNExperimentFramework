@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani.ext@nokia.com>
 
 """
 Pickle handler module
@@ -47,7 +58,8 @@ class PickleHandler:
         """
         self.logger(f"{self.__class__.__name__}: {msg}", level)
 
-    def __init__(self, IoH: IOH, ExpID: str, logger: LH, hash: str = ""):
+    def __init__(self, IoH: IOH, ExpID: str, logger: LH, hash: str = "",
+                 unix_time: str = ""):
         """__init__.
 
         Parameters
@@ -58,11 +70,13 @@ class PickleHandler:
             Unique identifier of the experiments
         """
         self.output_folder: str = IoH[s.pkl_path]
+        self.unix_time: str = unix_time
         self.experiment_id: str = ExpID+hash
         self.logger: LH = logger
         self.__write_msg("Pickle handler initialized")
 
-    def __filepath(self, name: str, disable_unique_id: bool = False) -> str:
+    def __filepath(self, name: str, disable_unique_id: bool = False,
+                   unix_time: bool = False) -> str:
         """__filepath.
         Function to generate the path to a pkl file given the name of the file
         without the extension
@@ -78,6 +92,8 @@ class PickleHandler:
 
         """
         file_name = f"{name}_{self.experiment_id}.pkl"
+        if unix_time:
+            file_name = f"{name}_{self.experiment_id}_{self.unix_time}.pkl"
         if disable_unique_id:
             file_name = f"{name}.pkl"
         return os.path.join(self.output_folder, file_name)
@@ -154,5 +170,6 @@ class PickleHandler:
 
         """
         file_path = self.__filepath(name, **kwargs)
+        self.__write_msg(f"Checking if {file_path} exists", LH.DEBUG)
         return os.path.exists(file_path)
 

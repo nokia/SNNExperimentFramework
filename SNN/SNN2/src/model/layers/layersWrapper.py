@@ -15,6 +15,7 @@ from tensorflow.keras.layers import Conv2D
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.layers import Normalization
 from tensorflow.keras.layers import Lambda
+from tensorflow.keras.layers import Dropout
 
 from SNN2.src.decorators.decorators import layers, clayer
 
@@ -27,7 +28,23 @@ def lstm(n_nodes, *args, **kwargs) -> LSTM:
         n_nodes = int(n_nodes)
     if isinstance(kwargs["input_shape"], str):
         kwargs["input_shape"] = ast.literal_eval(kwargs["input_shape"])
+    if "dropout" in kwargs.keys() and isinstance(kwargs["dropout"], str):
+        kwargs["dropout"] = float(kwargs["dropout"])
+        assert 0 <= kwargs["dropout"] <= 1
+    if "recurrent_dropout" in kwargs.keys() and isinstance(kwargs["recurrent_dropout"], str):
+        kwargs["recurrent_dropout"] = float(kwargs["recurrent_dropout"])
+        assert 0 <= kwargs["recurrent_dropout"] <= 1
     return LSTM(n_nodes, *args, **kwargs)
+
+@clayer
+def dropout(rate, *args, **kwargs) -> Dropout:
+    if isinstance(rate, str):
+        rate = float(rate)
+    if isinstance(kwargs["noise_shape"], str):
+        kwargs["noise_shape"] = ast.literal_eval(kwargs["noise_shape"])
+    if isinstance(kwargs["seed"], str):
+        kwargs["seed"] = int(kwargs["seed"])
+    return Dropout(rate, *args, **kwargs)
 
 @clayer
 def flatten(*args, **kwargs) -> Flatten:

@@ -14,5 +14,4 @@ from SNN2.src.decorators.decorators import flows
 def Flow_Selector(function, *args, **kwargs):
     if function in flows.keys():
         return flows[function](*args, **kwargs)
-    else:
-        raise ValueError(f"Flow \"{function}\" not available, current available callbacks: {list(flows.keys())}")
+    raise ValueError(f"Flow \"{function}\" not available, current available callbacks: {list(flows.keys())}")

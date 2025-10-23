@@ -26,9 +26,21 @@ class saveEmbeddings(Callback):
 
     def on_train_end(self, logs=None):
         for sample, label in zip(self.samples, self.labels):
-            embs = self.embh(sample)
-            self.ph.save(embs, f"embedding_{label}_iteration_{self.iteration}")
+            sample = sample.batch(1)
+            sample = sample.prefetch(tf.data.AUTOTUNE)
+            embs = [self.embh(s) for s in sample]
+            self.ph.save(embs, f"embedding_{label}_iteration_{self.iteration}",
+                         unix_time=True)
         self.iteration += 1
+
+    def on_test_end(self, logs=None):
+        for sample, label in zip(self.samples, self.labels):
+            sample = sample.batch(1)
+            sample = sample.prefetch(tf.data.AUTOTUNE)
+            embs = [self.embh(s) for s in sample]
+            self.ph.save(embs, f"embedding_{label}_test",
+                         unix_time=True)
+
 
 @ccb
 class saveObject(Callback):
@@ -44,5 +56,13 @@ class saveObject(Callback):
 
     def on_train_end(self, logs=None):
         for sample, label in zip(self.objects, self.labels):
-            self.ph.save(sample, f"object_{label}_iteration_{self.iteration}")
+            self.ph.save(sample, f"object_{label}_iteration_{self.iteration}",
+                         unix_time=True)
         self.iteration += 1
+
+    def on_test_end(self, logs=None):
+        for sample, label in zip(self.objects, self.labels):
+            self.ph.save(sample, f"object_{label}_test",
+                         unix_time=True)
+        self.iteration += 1
+

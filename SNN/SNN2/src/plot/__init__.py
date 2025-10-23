@@ -1,1 +1,1 @@
-import SNN2.src.plot.plot_functions
+# SNN2 package module

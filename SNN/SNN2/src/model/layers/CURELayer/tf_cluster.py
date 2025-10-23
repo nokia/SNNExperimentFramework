@@ -153,12 +153,20 @@ class TfCluster:
         return glob_dst(tmp_l, tmp_x, local_rep, remote_rep)
 
     @tf.autograph.experimental.do_not_convert
-    def __rep_closest(self, x: Union[tf.Tensor, np.ndarray]) -> None:
+    def __rep_closest(self, x: Union[tf.Tensor, np.ndarray],
+                      debug_flag: bool = False) -> None:
         t = 1
         diff: List[TfCluster] = []
         while t <= self.__required_rep + 1:
+            if debug_flag:
+                print(f"t: {t}, {t}/{self.__required_rep+1}")
             t = t*2 if t*2 < self.__required_rep + 1 else self.__required_rep+1
+            if debug_flag:
+                print(f"t: {t}")
             closest: List[TfCluster] = list(self.tree.nearest(x, t, objects="raw"))
+            if debug_flag:
+                for c in closest:
+                    print(f"Closest: {c.min_str()}")
             diff: List[TfCluster] = [x for x in closest if x.id != self.id ]
             if len(diff) > 0:
                 break
@@ -169,13 +177,19 @@ class TfCluster:
         c: TfCluster = diff[0]
         c_dst = self.dst(c)
 
+        if debug_flag:
+            print(f"Closest: {c.min_str()} - dst: {c_dst}")
+
         if self.__closest is None or c_dst < self.distance_closest:
+            if debug_flag:
+                print(f"self.__closest is None or c_dst < self.distance_closest")
+                print(f"{self.__closest} - {c_dst} < {self.distance_closest}")
             self.closest = (c.id, c_dst)
 
-    def nearest_from_tree(self) -> None:
+    def nearest_from_tree(self, **kwargs) -> None:
         assert self.tree is not None
         for r in self.rep.numpy():
-            self.__rep_closest(r)
+            self.__rep_closest(r, **kwargs)
         return self.closest
 
     def __single_remove(self, x: Union[tf.Tensor, np.ndarray]) -> None:
@@ -200,6 +214,11 @@ class TfCluster:
         if self.__closest is not None:
             return f"Cluster id: {self.__id}\nPoints:\n{self.__points}\ncentroid: {self.mean}\nRepresentors: {self.rep}\nClosest cluster id: {self.closest} - dst: {self.distance_closest}"
         return f"Cluster id: {self.__id}\nPoints:\n{self.__points}\ncentroid: {self.mean}\nRepresentors: {self.rep}\nClosest cluster not computed yet"
+
+    def min_str(self) -> str:
+        if self.__closest is not None:
+            return f"Cluster id: {self.__id} - Closest cluster id: {self.closest} - dst: {self.distance_closest}"
+        return f"Cluster id: {self.__id} - Closest cluster not computed yet"
 
     def __eq__(self, __o: Self) -> bool:
         return self.id == __o.id

@@ -32,7 +32,7 @@ then
 
 else
 		echo "${output} does not exists; Creating ${output}"
-		mkdir ${output}
+		mkdir -p ${output}
 fi
 
 echo "----- Start plotting -----"

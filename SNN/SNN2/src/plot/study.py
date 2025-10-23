@@ -16,6 +16,7 @@ import tensorflow as tf
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from statsmodels.graphics.tsaplots import plot_acf
+from matplotlib.lines import Line2D
 from SNN2.src.decorators.decorators import c_logger
 from SNN2.src.util.helper import dst2tensor
 
@@ -141,8 +142,37 @@ class Study:
         p.sns_set(font_scale=2.25)
         p.sns_set_api(sns.set_style, "white")
         self.plot(p, "ecdf", *args, **kwargs)
+        for lines, linestyle, legend_handle in \
+            zip(p.plot.axes.lines, [':', '--', '-'], p.plot.axes.legend_.legendHandles):
+            lines.set_linestyle(linestyle)
+            legend_handle.set_linestyle(linestyle)
         mplt.yticks([0.0, 0.25, 0.5, 0.75, 1.0], ['0', '25', '50', '75', '100'])
         p.save(output)
+
+    def line(self, df: pd.DataFrame,
+             output: str,
+             *args,
+             palette: Optional[Any] = None,
+             **kwargs) -> None:
+        p = plt(df, format=["pdf", "png"], palette=palette)
+        p.sns_set(font_scale=2.25)
+        p.sns_set_api(sns.set_style, "white")
+        self.plot(p, "line", *args, **kwargs)
+        self.write_msg(len(p.plot.axes.lines))
+        self.write_msg(len(p.plot.axes.legend_.legendHandles))
+        lines = p.plot.axes.lines[0:3]
+        self.write_msg(len(lines))
+        for lines, linestyle, legend_handle, color in \
+              zip(lines, [':', '--', '-'], p.plot.axes.legend_.legendHandles, palette):
+            lines.set_linestyle(linestyle)
+            if linestyle == '--':
+                self.write_msg(f"handle type: {type(legend_handle)}")
+                legend_handle.set_fill(False)
+            legend_handle.set_linestyle(linestyle)
+            legend_handle.set_color(color)
+        mplt.xticks([1, 30, 60, 90, 120], ['1', '30', '60', '90', '120'])
+        p.save(output)
+
 
     def violin(self, df: pd.DataFrame,
             output: str,
@@ -185,9 +215,55 @@ class Study:
                   hue_order=["U", "B", "G"],
                   palette=cm,
                   linewidth=2.0,
-                  set_kwargs={"xlabel": f"VMAF Value",
+                  set_kwargs={"xlabel": f"Anomalous minutes",
                               "ylabel": "Proportion [%]"},
-                  legend_kwargs={"ncol": 3, "x": 0.5, "y": 0.5, "labels": [r"$\hat{G}$", r"$\hat{B}$", r"$\hat{U}$"]})
+                  legend_kwargs={"ncol": 3,
+                                 "x": 0.5, "y": 0.5,
+                                 "labels": [r"$\hat{G}$", r"$\hat{B}$", r"$\hat{U}$"]})
+
+    def all_window_feature_study(self,
+                                 data: List[Dict[str, Dict[str, Any]]],
+                                 labels: List[str]) -> None:
+        clms = list(data[0]['Windows']['columns'])
+        df_clms = ['Label', 'Minute']
+        df_clms.extend(clms)
+        df = pd.DataFrame(columns=df_clms)
+
+        for trg, l in zip(data, labels):
+            targets: tf.Tensor = trg.dft("Windows")
+            targets = targets.numpy()
+            minute = np.repeat(np.arange(1, targets.shape[1]+1), targets.shape[0])
+            targets = np.reshape(targets, (targets.shape[0]*targets.shape[1], targets.shape[2]))
+            l_data = {'Label': l, 'Minute': minute}
+            trg_data = {clm: targets[:, i] for i, clm in enumerate(clms)}
+            l_data.update(trg_data)
+            tmp_df = pd.DataFrame(l_data)
+            df = pd.concat([df, tmp_df])
+
+        self.write_msg(f"Dataframe: {df}")
+
+        for clm in clms:
+            output_file = f"{self.output}/evolution_{clm}_all_windows.pdf"
+            colors = ["#e41a1c", "#377eb8", "#4daf4a"]
+            cm = sns.color_palette(colors)
+            rcParams['figure.figsize'] = 8,4
+            rcParams['font.size'] = 25
+
+            self.line(df, output_file,
+                      x="Minute",
+                      y=clm,
+                      hue="Label",
+                      hue_order=["U", "B", "G"],
+                      palette=cm,
+                      linewidth=2.0,
+                      set_kwargs={"xlabel": f"Window [mm]",
+                                  "ylabel": "Value",
+                                  "title": f"{clm} evolution"},
+                      legend_kwargs={"ncol": 3,
+                                     "x": 0.5,
+                                     "y": -0.5,
+                                     "labels": [r"$\hat{G}$", r"$\hat{B}$", r"$\hat{U}$"]})
+
 
     def window_study(self,
                      data: Dict[str, Dict[str, Any]],
@@ -277,13 +353,15 @@ class Study:
         wdw["Expected_Label"].replace(1, "Negative", inplace=True)
 
         p = plt(wdw, format=["pdf", "png"])
-        p("joint", x="X", y="Y", hue="Origin", kind="kde", fill=True, thresh=0.05, alpha=.8, marginal_kws={'common_norm': False})
+        p("joint", x="X", y="Y", hue="Origin", kind="kde", fill=True,
+          thresh=0.05, alpha=.8, marginal_kws={'common_norm': False})
         legend_position = (1.18, 1.0)
         # p.set_legend(p.plot.ax_joint, "upper left", bbox_to_anchor=legend_position, ncol=1)
         p.save(f"{self.output}/stat_{label}_umap_origin.pdf")
 
         p = plt(wdw, format=["pdf", "png"])
-        p("joint", x="X", y="Y", hue="Expected_Label", kind="kde", fill=True, thresh=0.05, alpha=.8, marginal_kws={'common_norm': False})
+        p("joint", x="X", y="Y", hue="Expected_Label", kind="kde",
+          fill=True, thresh=0.05, alpha=.8, marginal_kws={'common_norm': False})
         legend_position = (1.18, 1.0)
         # p.move_legend(p.plot.ax_joint, "upper left", bbox_to_anchor=legend_position, ncol=1)
         p.save(f"{self.output}/stat_{label}_umap_exp_l.pdf")
@@ -300,16 +378,21 @@ class Study:
         # self.window_study(self.data.goods_prop, "Trivial-Positives")
         # self.window_study(self.data.bads_prop, "Trivial-Negatives")
         # self.window_study(self.data.grays_prop, "Difficult")
-        self.all_window_study([self.data.goods_prop, self.data.bads_prop, self.data.grays_prop], ["G", "B", "U"])
+        self.all_window_study([self.data.goods_prop, self.data.bads_prop, self.data.grays_prop],
+                              ["G", "B", "U"])
+        self.all_window_feature_study([self.data.goods_prop,
+                                       self.data.bads_prop,
+                                       self.data.grays_prop],
+                                      ["G", "B", "U"])
         # self.window_study(self.data.training, "Training")
         # self.window_study(self.data.validation, "Validation")
         # self.window_study(self.data.test, "Test")
         # self.window_study(self.data.gray_out_train, "Difficult")
 
-        # self.window_umap(self.data.training, "Training")
-        # self.window_umap(self.data.validation, "Validation")
-        # self.window_umap(self.data.test, "Test")
-        # self.window_umap(self.data.gray_out_train, "Difficult")
+        self.window_umap(self.data.training, "Training")
+        self.window_umap(self.data.validation, "Validation")
+        self.window_umap(self.data.test, "Test")
+        self.window_umap(self.data.gray_out_train, "Difficult")
 
     def calculate_distances(self,
                             p: np.ndarray,
@@ -317,32 +400,36 @@ class Study:
                             *args,
                             pbar: Optional[tqdm] = None,
                             label: str = "") -> np.ndarray:
-            f = f"pos_neg_distances-{label}"
+        f = f"pos_neg_distances-{label}"
 
-            if self.ph.check(f):
-                dst = self.ph.load(f)
-                if pbar is not None:
-                    pbar.update(p.shape[0]*n.shape[0])
-                    pbar.close()
-            else:
-                comb = np.array(np.meshgrid(np.arange(p.shape[0]), np.arange(n.shape[0]))).T.reshape(p.shape[0]*n.shape[0], -1)
-
-                def distance(elem):
-                    # self.write_msg(f"distances between {p[elem[0]], n[elem[1]]}", level=LH.DEBUG)
-                    # self.write_msg(f"distances between shapes {p[elem[0]].shape, n[elem[1]].shape}", level=LH.DEBUG)
-                    distance, _= fastdtw(p[elem[0]], n[elem[1]], dist=euclidean)
-                    if pbar is not None:
-                        pbar.update(1)
-                    # self.write_msg(f"Distance: {distance}", level=LH.DEBUG)
-                    return distance
-
-                v_distances = np.vectorize(distance, signature='(n)->()')
-                dst = v_distances(comb)
-                dst = tf.convert_to_tensor(dst)
-                self.write_msg(f"Distances: {dst.shape}")
-                self.ph.save(dst, f)
+        if self.ph.check(f):
+            dst = self.ph.load(f)
+            if pbar is not None:
+                pbar.update(p.shape[0]*n.shape[0])
                 pbar.close()
-            return dst
+        else:
+            comb = np.array(np.meshgrid(np.arange(p.shape[0]),
+                                         np.arange(n.shape[0]))).T.reshape(
+                                         p.shape[0]*n.shape[0], -1)
+
+            def distance(elem):
+                # self.write_msg(f"distances between {p[elem[0]], n[elem[1]]}", level=LH.DEBUG)
+                # self.write_msg(f"distances between shapes "
+                #                 f"{p[elem[0]].shape, n[elem[1]].shape}",
+                #                 level=LH.DEBUG)
+                distance, _= fastdtw(p[elem[0]], n[elem[1]], dist=euclidean)
+                if pbar is not None:
+                    pbar.update(1)
+                # self.write_msg(f"Distance: {distance}", level=LH.DEBUG)
+                return distance
+
+            v_distances = np.vectorize(distance, signature='(n)->()')
+            dst = v_distances(comb)
+            dst = tf.convert_to_tensor(dst)
+            self.write_msg(f"Distances: {dst.shape}")
+            self.ph.save(dst, f)
+            pbar.close()
+        return dst
 
     def merge_dimensions(self,
                          new_obj: tf.Tensor,
@@ -350,19 +437,19 @@ class Study:
                          original: Optional[tf.Tensor] = None,
                          axis: int = 1,
                          **kwargs) -> tf.Tensor:
-            if original is None:
-                res = tf.expand_dims(new_obj, axis)
-                self.write_msg(f"Tensor: {res}")
-                self.write_msg(f"Tensor shape: {res.shape}")
-                return res
-
-            tmp_dst_tf = tf.expand_dims(new_obj, axis)
-            self.write_msg(f"tmp Tensor: {tmp_dst_tf}")
-            self.write_msg(f"tmp Tensor shape: {tmp_dst_tf.shape}")
-            res = tf.concat([original, tmp_dst_tf], axis=axis)
+        if original is None:
+            res = tf.expand_dims(new_obj, axis)
             self.write_msg(f"Tensor: {res}")
             self.write_msg(f"Tensor shape: {res.shape}")
             return res
+
+        tmp_dst_tf = tf.expand_dims(new_obj, axis)
+        self.write_msg(f"tmp Tensor: {tmp_dst_tf}")
+        self.write_msg(f"tmp Tensor shape: {tmp_dst_tf.shape}")
+        res = tf.concat([original, tmp_dst_tf], axis=axis)
+        self.write_msg(f"Tensor: {res}")
+        self.write_msg(f"Tensor shape: {res.shape}")
+        return res
 
     def avg_full_dst(self,
                      dst: tf.Tensor,
@@ -371,11 +458,13 @@ class Study:
                      **kwargs) -> Tuple[tf.Tensor, tf.Tensor]:
         avg_wdw_wdw_distances = tf.reduce_mean(dst, axis=axis)
         # self.write_msg(f"Average p_wdw - n_wdw distance Tensor: {avg_wdw_wdw_distances}")
-        self.write_msg(f"Average p_wdw - n_wdw distance Tensor shape: {avg_wdw_wdw_distances.shape}")
+        self.write_msg(f"Average p_wdw - n_wdw distance Tensor shape: "
+                       f"{avg_wdw_wdw_distances.shape}")
 
         avg_pwdw_n_distances = tf.reduce_mean(avg_wdw_wdw_distances, axis=axis)
         # self.write_msg(f"Average p_wdw - n population distance Tensor: {avg_pwdw_n_distances}")
-        self.write_msg(f"Average p_wdw - n population distance Tensor shape: {avg_pwdw_n_distances.shape}")
+        self.write_msg(f"Average p_wdw - n population distance Tensor shape: "
+                       f"{avg_pwdw_n_distances.shape}")
         return avg_wdw_wdw_distances, avg_pwdw_n_distances
 
     def distance_for_each_dim(self,
@@ -430,7 +519,8 @@ class Study:
         self.write_msg(f"negative dimension shape: {neg_dim.shape}")
 
         if pos_dim.shape[0] == 0 or neg_dim.shape[0] == 0:
-            self.write_msg(f"The first dimension of the positives or negatives is 0, nothing to compare")
+            self.write_msg("The first dimension of the positives or negatives is 0, "
+                           "nothing to compare")
             return tf.zeros([0]), tf.zeros([0])
 
         f_pos_neg = f"{label}-allDim-"
@@ -495,10 +585,18 @@ class Study:
                                                                  label=f"{label}-f_neg_s_pos",
                                                                  **kwargs)
 
-        avg_f_p_s_p_distances_df = pd.DataFrame({"Label": f"{first_p_id}-{second_p_id}", "Value": f_pos_s_pos_avg.numpy()})
-        avg_f_p_s_n_distances_df = pd.DataFrame({"Label": f"{first_p_id}-{second_n_id}", "Value": f_pos_s_neg_avg.numpy()})
-        avg_f_n_s_p_distances_df = pd.DataFrame({"Label": f"{first_n_id}-{second_p_id}", "Value": f_neg_s_pos_avg.numpy()})
-        avg_f_n_s_n_distances_df = pd.DataFrame({"Label": f"{first_n_id}-{second_n_id}", "Value": f_neg_s_neg_avg.numpy()})
+        avg_f_p_s_p_distances_df = pd.DataFrame({
+            "Label": f"{first_p_id}-{second_p_id}",
+            "Value": f_pos_s_pos_avg.numpy()})
+        avg_f_p_s_n_distances_df = pd.DataFrame({
+            "Label": f"{first_p_id}-{second_n_id}",
+            "Value": f_pos_s_neg_avg.numpy()})
+        avg_f_n_s_p_distances_df = pd.DataFrame({
+            "Label": f"{first_n_id}-{second_p_id}",
+            "Value": f_neg_s_pos_avg.numpy()})
+        avg_f_n_s_n_distances_df = pd.DataFrame({
+            "Label": f"{first_n_id}-{second_n_id}",
+            "Value": f_neg_s_neg_avg.numpy()})
 
         dst_df = pd.concat([avg_f_p_s_p_distances_df,
                             avg_f_p_s_n_distances_df,
@@ -552,7 +650,8 @@ class Study:
         self.write_msg(f"P-P: {pos_pos}")
         self.write_msg(f"N-N: {neg_neg}")
 
-        avg_pwdw_n_distances_df = pd.DataFrame({"Label": "P-N", "Value": pos_neg_avg.numpy()})
+        avg_pwdw_n_distances_df = pd.DataFrame({
+            "Label": "P-N", "Value": pos_neg_avg.numpy()})
         avg_pwdw_p_distances_df = pd.DataFrame({"Label": "P-P", "Value": pos_pos_avg.numpy()})
         avg_nwdw_n_distances_df = pd.DataFrame({"Label": "N-N", "Value": neg_neg_avg.numpy()})
 
@@ -614,7 +713,9 @@ class Study:
                 self.write_msg(f"Number of idx with such problem: {len(prb_idx)}")
                 self.write_msg(f"idx with such problem: {prb_idx}")
                 prb_dst = sub_data(dst, prb_idx)
-                self.pos_neg_similarity(prb_dst, label=f"{label}-{problem}", **kwargs)
+                self.pos_neg_similarity(prb_dst,
+                                        label=f"{label}-{problem}",
+                                        **kwargs)
 
         # study_problem(self.data.gray_out_train, "Difficult", subset_dim=0.5)
         # study_problem(self.data.training, "Training", subset_dim=0.5)
@@ -636,7 +737,8 @@ class Study:
                                               **kwargs)
 
         def multiDst_study_feature(first_dst, second_dst, label: str = "multi-dst-study", **kwargs):
-            assert first_dst["Windows"]["tf_values"].shape[2] == second_dst["Windows"]["tf_values"].shape[2]
+            assert (first_dst["Windows"]["tf_values"].shape[2] ==
+                    second_dst["Windows"]["tf_values"].shape[2])
 
             for dim in range(first_dst["Windows"]["tf_values"].shape[2]):
                 self.write_msg(f"Analyzing dimension {dim}")
@@ -719,7 +821,10 @@ class Study:
         buoni = self.data.goods_targets.numpy()
         threshold: float = 40.0
         false_positives_idx: List[int] = np.where(buoni < threshold)[0]
-        self.logger(self.__class__.__name__, f"Has been detected {len(false_positives_idx)}/{len(buoni)} samples that are classified as good but with a performance lower than the threshold", LH.INFO)
+        self.logger(self.__class__.__name__,
+                    f"Has been detected {len(false_positives_idx)}/{len(buoni)} "
+                    f"samples that are classified as good but with a performance "
+                    f"lower than the threshold", LH.INFO)
         windows = tf.gather(self.data.goods_windows, false_positives_idx)
         if len(windows) > 0:
             self.logger(self.__class__.__name__, f"Window example: \n{windows[0]}", LH.INFO)
@@ -737,12 +842,13 @@ class Study:
                 while len(exp) > 1:
                     ft = windows[i, j, :].numpy()
                     j += 1
-                    tmp_exp = df[(df["packet_drop_rate"] == ft[0]) & \
-                                 (df["byte_drop_rate"] == ft[1]) & \
-                                 (df["avg_timeDelta"] == ft[2]) & \
-                                 (df["std_timeDelta"] == ft[3]) & \
-                                 (df["skw_timeDelta"] == ft[4]) & \
-                                 (df["kur_timeDelta"] == ft[5])]["exp_id"].values
+                    tmp_exp = df[
+                        (df["packet_drop_rate"] == ft[0]) & \
+                        (df["byte_drop_rate"] == ft[1]) & \
+                        (df["avg_timeDelta"] == ft[2]) & \
+                        (df["std_timeDelta"] == ft[3]) & \
+                        (df["skw_timeDelta"] == ft[4]) & \
+                        (df["kur_timeDelta"] == ft[5])]["exp_id"].values
                     exp = np.intersect1d(exp, tmp_exp)
                 experiments.append(exp)
             self.logger(self.__class__.__name__, f"Experiments ids: \n{experiments}", LH.INFO)
@@ -826,7 +932,8 @@ class Study:
                 output: str,
                 appendix: str = "") -> None:
         for stat in df["Stat"].unique():
-            fileName = f"{output}/stat_{stat}_pdf{appendix}{self.hash}.pdf"
+            fileName = (f"{output}/stat_{stat}_pdf"
+                        f"{appendix}{self.hash}.pdf")
             if not FH.exists(fileName):
                 stat_df = df[df["Stat"] == stat]
                 p = plt(stat_df, format=["pdf", "png"])

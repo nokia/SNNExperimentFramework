@@ -1,7 +1,18 @@
 #!/usr/bin/env python
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the graphNU grapheneral Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# graphNU grapheneral Public License for more details.
+#
+# You should have received a copy of the graphNU grapheneral Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2021 Mattia Milani <mattia.milani@nokia.com>
 
 """
 Fit function Wrapper
@@ -29,8 +40,9 @@ def stepFit(model,
             callbacks: List[Callback],
             data: tf.data.Dataset,
             start: int,
+            *args,
             verbose: Optional[Union[str, int]] = 1,
-            *args, **kwargs):
+            **kwargs):
     if isinstance(verbose, str) and verbose != "auto":
         verbose = int(verbose)
     return model.model.fit(data, *args,
@@ -138,6 +150,42 @@ def graysAfterFit_netReset(model,
 
         if i == reps-1:
             write_msg(f"Exit condition True")
+            model.compile(active_reset=active_reset)
+            break
+        data = next(grayAction)
+        model.set_weights(model_weights)
+        model.compile(active_reset=active_reset)
+
+    return chain_histories(histories)
+
+@fitMethod
+@f_logger
+def graysAfterFitCURE_netReset(model,
+                               callbacks: List[Callback],
+                               data: tf.data.Dataset,
+                               grayAction: Generator,
+                               reps: int = 10,
+                               active_reset: bool = False,
+                               checkpoint_file: Optional[str] = None,
+                               *args, **kwargs) -> History:
+    logger, write_msg = kwargs["logger"], kwargs["write_msg"]
+    del kwargs["logger"]
+    del kwargs["write_msg"]
+    write_msg(f"GRAYSAFTER FIT for the actuall SNN training, {reps} number of reps required")
+
+    if isinstance(reps, str):
+        reps = int(reps)
+
+    # model.model_definition.load_weights(checkpoint_file)
+    # print("TEMPORARY LOAD OF THE MODEL!!! this should be removed otherwise the starting point is always the same")
+    model_weights = model.get_weights()
+    histories = []
+    for i in range(reps):
+        write_msg(f"Repetition {i}")
+        histories.append(default(model, callbacks, data, *args, **kwargs))
+
+        if i == reps-1:
+            write_msg("Exit condition True")
             model.compile(active_reset=active_reset)
             break
         data = next(grayAction)

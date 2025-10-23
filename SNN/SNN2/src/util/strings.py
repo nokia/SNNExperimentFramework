@@ -1,6 +1,17 @@
-# © 2024 Nokia
-# Licensed under the BSD 3 Clause license
-# SPDX-License-Identifier: BSD-3-Clause
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright (C) 2020 Mattia Milani <mattia.milani.ext@nokia.com>
 
 """
 strings module
@@ -218,12 +229,13 @@ class s:
     gray_default = "grays"
     gray_afterFit = "graysAfterFit"
     gray_afterFit_netReset = "graysAfterFit_netReset"
+    gray_afterFit_cure_netReset = "graysAfterFitCURE_netReset"
     gray_checkpoint = "graysAfterFit_modelCheckpoint"
     gray_generateEmb = "graysAfterFit_generateEmbeddings"
     rlTrnFrz_graysAfterFit = "RLTrnFrz_graysAfterFit"
     rlTrnFrz_external_graysAfterFit = "RLTrnFrz_External_graysAfterFit"
     rlTrnFrz_external_AfterTrivial = "RLTrnFrz_External_AfterTrivial"
-    all_grays = [gray_default, gray_afterFit, gray_afterFit_netReset, gray_checkpoint, gray_generateEmb, rlTrnFrz_graysAfterFit, rlTrnFrz_external_graysAfterFit, rlTrnFrz_external_AfterTrivial]
+    all_grays = [gray_default, gray_afterFit, gray_afterFit_netReset, gray_checkpoint, gray_generateEmb, rlTrnFrz_graysAfterFit, rlTrnFrz_external_graysAfterFit, rlTrnFrz_external_AfterTrivial, gray_afterFit_cure_netReset ]
     emb_grays = [gray_generateEmb]
     rl_training = [rlTrnFrz_graysAfterFit, rlTrnFrz_external_graysAfterFit, rlTrnFrz_external_AfterTrivial]
 
@@ -267,3 +279,5 @@ class s:
     a_net = "Anchor"
     p_net = "Positive"
     n_net = "Negative"
+
+    unix_time = "uxtime_sec"

@@ -52,7 +52,7 @@ def main():
     evolution_file: str = options.evolution_file
     phase: str = options.phase
     video_title: str = options.title
-    if video_title == "Scarlet":
+    if video_title == "ScarletV3":
         video_title = "Scarlet"
     sns.set_theme(context="paper")
     # mplt.style.use(['science','ieee'])

@@ -62,6 +62,7 @@ class PreProcessing:
 
         self.flow_name = self.params[s.pp_flow_name]
         self.write_msg(f"Flow name: {self.flow_name}")
+        self.write_msg(f"Flow PklH: {str(self.ph)}")
         self.flow = flow_param.get_handler(self.flow_name)(self.action_parm,
                                                            PklH=self.ph,
                                                            logger=self.logger)

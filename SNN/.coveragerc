@@ -1,0 +1,21 @@
+[run]
+branch=True
+command_line= -m pytest -o "testpaths=tests" --cov=SNN2/ --cov-report term-missing
+omit =
+		bash/**/*
+                Conf/**/*
+                docs/**/*
+                env/**/*
+                py/**/*
+		.git/*
+		.pytest_cache/*
+		**/__init__.py
+source=
+        SNN2
+
+[tool:pytest]
+testpaths = tests
+addopts = --cov=SNN2/ --cov-report term-missing --rng-salt "v0.1.0"
+
+[report]
+show_missing=True
