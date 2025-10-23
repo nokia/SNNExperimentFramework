@@ -6,7 +6,6 @@ import ast
 import math
 import numpy as np
 import tensorflow as tf
-import tensorflow_probability as tfp
 from scipy import optimize
 from SNN2.src.model.RLObservationPP.clsCmExp import my_tf_round
 
@@ -89,7 +88,10 @@ class controlledCrossEntropy(Callback):
 
     def __ensure_triangular(self, C: tf.Tensor) -> tf.Tensor:
         C_t = tf.transpose(C)
-        lower_triangular = tfp.math.fill_triangular([1]*sum(range(C.shape[0]+1)))
+        # Create lower triangular matrix using TensorFlow
+        n = C.shape[0]
+        indices = tf.meshgrid(tf.range(n), tf.range(n), indexing='ij')
+        lower_triangular = tf.cast(indices[0] >= indices[1], tf.float32)
         self.write_msg(lower_triangular)
         C = tf.where(lower_triangular==1, C_t, C)
         return C

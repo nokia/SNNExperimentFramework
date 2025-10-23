@@ -37,4 +37,4 @@ setup = [
 ]
 
 [project.scripts]
-darf = "SNN2.main:main"
+snn = "SNN2.main:main"

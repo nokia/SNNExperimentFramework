@@ -160,8 +160,11 @@ def windowing(df: pd.DataFrame,
     write_msg(f"Batch size: {batch_size}")
     # Mask to remove the inter experiment windows
     mask = np.array([[True]*(duration-(window-1)) + [False]*(window-1)])
+    write_msg(f"Initial mask shape: {mask.shape}")
     mask = np.repeat(mask, int(len(df)/duration), axis=0).flatten()
     mask = mask[:-(window-1)]
+    write_msg(f"Mask to apply shape: {mask.shape}")
+    write_msg(f"Mask to apply: {mask}", level=LH.DEBUG)
 
     for key, req in requests.items():
         write_msg(f"{key} - Requests columns: {req['columns']}")
@@ -173,12 +176,22 @@ def windowing(df: pd.DataFrame,
 
         write_msg(f"Including {req['columns']} into {key}['Values'] request object")
         write_msg(f"Values: {req['Values']}")
+        write_msg(f"Values shape: {req['Values'].shape}")
+        write_msg(f"Creating batches with window size {window} and batch size {batch_size}")
 
         batch_stats = timeseries_dataset_from_array(req["Values"], None,
                                                     sequence_length=window,
                                                     batch_size=batch_size,
                                                     shuffle=False)
-        stats_tf = tf.boolean_mask(list(batch_stats)[0], mask)
+        write_msg(f"Created batches shape: {list(batch_stats)[0].shape}, {batch_stats}")
+        write_msg(f"Created batches ({len(batch_stats)}): {batch_stats}")
+        write_msg(f"Applying boolean mask of shape: {mask.shape}")
+        # concatenate all the batches tf dataset into a single tf tensor to apply the mask
+        stats_tf = tf.concat(list(batch_stats), axis=0)
+        write_msg(f"Concatenated batches shape: {stats_tf.shape}")
+        # apply the mask
+        stats_tf = tf.boolean_mask(stats_tf, mask)
+        write_msg(f"Applied boolean mask, shape: {stats_tf.shape}")
         write_msg(f"Applied boolean mask, {stats_tf}", level=LH.DEBUG)
 
         if req["post_operation"] is not None:

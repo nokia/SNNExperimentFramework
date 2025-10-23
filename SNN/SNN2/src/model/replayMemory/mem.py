@@ -7,6 +7,9 @@ ReplayMemory module
 ===================
 
 Class used to manage a replay memory
+
+This module cannot be used untill an incomability between TF Agents and keras is solved
+in order to use tf_uniform_replay_buffer from TF Agents.
 """
 
 import math
@@ -14,8 +17,8 @@ import numpy as np
 from typing import Generator, Optional, Tuple, Union
 import tensorflow as tf
 
-from tf_agents.replay_buffers import tf_uniform_replay_buffer
-from tf_agents.utils import common
+# from tf_agents.replay_buffers import tf_uniform_replay_buffer
+# from tf_agents.utils import common
 
 from SNN2.src.io.files import FileHandler
 from SNN2.src.io.logger import LogHandler as LH
@@ -50,6 +53,7 @@ class ReplayMemory:
                  output_file: Optional[str] = None,
                  logger: Optional[LH] = None,
                  batch_size: int = 1):
+        raise NotImplementedError("TF Replay Memory is currently not supported due to incompatibility between TF Agents and Keras")
         self.data_spec = data_spec
         self.max_length :int = max_length
         self.disable_unique_id = True
@@ -58,19 +62,19 @@ class ReplayMemory:
         self.logger = logger
         self.batch_size = batch_size
 
-        self.memory = tf_uniform_replay_buffer.TFUniformReplayBuffer(
-                    self.data_spec,
-                    self.batch_size,
-                    max_length=self.max_length
-                )
+        # self.memory = tf_uniform_replay_buffer.TFUniformReplayBuffer(
+        #             self.data_spec,
+        #             self.batch_size,
+        #             max_length=self.max_length
+        #         )
 
-        self.rb_checkpointer: Optional[common.Checkpointer] = None
-        if output_file is not None:
-            self.rb_checkpointer: common.Checkpointer = common.Checkpointer(
-                ckpt_dir=output_file,
-                max_to_keep=1,
-                replay_buffer=self.memory)
-            self.rb_checkpointer.initialize_or_restore()
+        # self.rb_checkpointer: Optional[common.Checkpointer] = None
+        # if output_file is not None:
+        #     self.rb_checkpointer: common.Checkpointer = common.Checkpointer(
+        #         ckpt_dir=output_file,
+        #         max_to_keep=1,
+        #         replay_buffer=self.memory)
+        #     self.rb_checkpointer.initialize_or_restore()
 
     def clear(self) -> None:
         self.write_msg(f"Memory clear!")

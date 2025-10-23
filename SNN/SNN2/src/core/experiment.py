@@ -126,8 +126,8 @@ class ExperimentEnv:
                             logger = self.logger)
 
     def fit(self, *args, **kwargs) -> None:
-        print(f"Model trained: {self.model.trained}")
-        print(f"Model extension name: {self.model_extension_name}")
+        # print(f"Model trained: {self.model.trained}")
+        # print(f"Model extension name: {self.model_extension_name}")
         if self.model.trained and self.model_extension_name is None:
             print("Model already trained")
             # raise Exception("Model already trained")
@@ -154,8 +154,6 @@ class ExperimentEnv:
         self.write_msg("Starting training")
         # with tf.device("gpu:0"):
         # with tf.device("cpu:0"):
-
-        # print(self.train_data)
 
         # history = self.model.model.fit(self.train_data,
         #                          validation_data=self.validation_data,

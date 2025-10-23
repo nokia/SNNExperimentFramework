@@ -126,8 +126,8 @@ class DataObject(UserDict):
             dft_obj = dft_obj[0]
 
         if "Values" in tmp_obj.keys() and tmp_obj["Values"].shape != dft_obj.shape:
-            self.write_msg(f"Super imposing the dft values over the numpy values")
-            raise Exception("VALUES SHOULD NOT BE IN THE OBJECT, do not keep the numpy alternative")
+            # self.write_msg(f"Super imposing the dft values over the numpy values")
+            # raise Exception("VALUES SHOULD NOT BE IN THE OBJECT, do not keep the numpy alternative")
             tmp_obj["Values"] = dft_obj.numpy()
         for clm in tmp_obj.keys():
             if clm not in exclude_clm:
