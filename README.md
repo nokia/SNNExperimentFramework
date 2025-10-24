@@ -34,4 +34,4 @@ to download and use the mentioned datasets and reproduce the results presented i
 
 ## SNN Framework
 
-Refer to the [documentation](https://tiamilani.github.io/SNNExperimentFramework/) available on github pages for the SNN tool and examples on how to use it.
+Refer to the [documentation](https://nokia.github.io/SNNExperimentFramework/) available on github pages for the SNN tool and examples on how to use it.
